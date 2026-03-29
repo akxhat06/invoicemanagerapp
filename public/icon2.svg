@@ -1,0 +1,57 @@
+<svg width="100%" viewBox="0 0 680 480" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e7eb8;stop-opacity:1"/>
+      <stop offset="50%" style="stop-color:#0d9488;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#f97316;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#fbbf24;stop-opacity:1"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Outer circle rings -->
+  <circle cx="340" cy="180" r="100" fill="none" stroke="url(#grad1)" stroke-width="8" opacity="0.15" style="fill:none;color:rgb(255, 255, 255);stroke-width:8px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.15;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <circle cx="340" cy="180" r="88" fill="none" stroke="url(#grad1)" stroke-width="3" style="fill:none;color:rgb(255, 255, 255);stroke-width:3px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  
+  <!-- Background circle -->
+  <circle cx="340" cy="180" r="80" fill="url(#grad1)" style="stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  
+  <!-- Accent arc top -->
+  <path d="M 290 145 A 80 80 0 0 1 390 145" fill="none" stroke="url(#grad2)" stroke-width="6" stroke-linecap="round" style="fill:none;color:rgb(255, 255, 255);stroke-width:6px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  
+  <!-- VS monogram -->
+  <g transform="translate(340, 180)" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+    <!-- V shape -->
+    <path d="M -28 -35 L -10 10 L 8 -35" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" style="fill:none;stroke:rgb(255, 255, 255);color:rgb(255, 255, 255);stroke-width:9px;stroke-linecap:round;stroke-linejoin:round;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+    
+    <!-- S shape -->
+    <path d="M 12 -25 Q 25 -25 25 -15 Q 25 -5 12 -5 Q 30 -5 30 8 Q 30 18 17 18" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" style="fill:none;stroke:rgb(255, 255, 255);color:rgb(255, 255, 255);stroke-width:9px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+    
+    <!-- Connection element -->
+    <circle cx="0" cy="20" r="6" fill="#fbbf24" style="fill:rgb(251, 191, 36);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+    <circle cx="0" cy="20" r="3" fill="#fff" style="fill:rgb(255, 255, 255);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  </g>
+  
+  <!-- Accent arc bottom -->
+  <path d="M 290 215 A 80 80 0 0 0 390 215" fill="none" stroke="#059669" stroke-width="4" stroke-linecap="round" style="fill:none;stroke:rgb(5, 150, 105);color:rgb(255, 255, 255);stroke-width:4px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  
+  <!-- Company name -->
+  <text x="340" y="300" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="700" fill="#1e7eb8" letter-spacing="-1" style="fill:rgb(30, 126, 184);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:system-ui, -apple-system, sans-serif;font-size:48px;font-weight:700;text-anchor:middle;dominant-baseline:auto">
+    Vishwa Shree
+  </text>
+  
+  <!-- Subtitle -->
+  <text x="340" y="340" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="600" fill="#059669" letter-spacing="2" style="fill:rgb(5, 150, 105);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:system-ui, -apple-system, sans-serif;font-size:28px;font-weight:600;text-anchor:middle;dominant-baseline:auto">
+    ENTERPRISES
+  </text>
+  
+  <!-- Decorative underline -->
+  <rect x="260" y="355" width="160" height="3" rx="1.5" fill="url(#grad2)" style="stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  
+  <!-- Tagline dots -->
+  <circle cx="305" cy="380" r="3" fill="#0d9488" opacity="0.6" style="fill:rgb(13, 148, 136);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.6;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <circle cx="340" cy="380" r="3" fill="#0d9488" opacity="0.8" style="fill:rgb(13, 148, 136);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.8;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <circle cx="375" cy="380" r="3" fill="#0d9488" opacity="0.6" style="fill:rgb(13, 148, 136);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.6;font-family:&quot;Anthropic Sans&quot;, -apple-system, &quot;system-ui&quot;, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+</svg>

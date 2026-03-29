@@ -1,0 +1,156 @@
+@import "tailwindcss";
+
+/* Class-based dark mode for next-themes (Tailwind v4 defaults to prefers-color-scheme only). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─── App-wide semantic tokens (light) ─── */
+:root {
+  --background: #f4f4f5;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --border: #e4e4e7;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  /* Mustard brand + warm gold CTAs */
+  --accent: #e0c068;
+  --accent-foreground: #1e1e2d;
+  --accent-secondary: #d9a35d;
+  --accent-secondary-foreground: #1a1410;
+  --surface-brand: #1e1e2d;
+  /* Navy primary (auth / solid buttons) */
+  --primary: #0f2847;
+  --primary-hover: #0c2038;
+  --primary-foreground: #ffffff;
+  --header: rgba(255, 255, 255, 0.95);
+  --header-border: rgba(228, 228, 231, 0.8);
+  /* Add-company slide-over */
+  --panel: #ffffff;
+  --panel-field: #f4f4f5;
+  --panel-foreground: #18181b;
+  --panel-muted: #71717a;
+  /* Auth screens */
+  --auth-canvas: #f4f4f5;
+  --auth-hero: #0c1424;
+  --auth-hero-deep: #070b14;
+  --auth-hero-glow: rgba(30, 58, 95, 0.4);
+  --auth-hero-glow-mid: rgba(15, 40, 71, 0.6);
+  --auth-card: #ffffff;
+  --auth-card-border: rgba(228, 228, 231, 0.9);
+  --auth-card-shadow: rgba(15, 40, 71, 0.25);
+  --auth-input: #1a2235;
+  --auth-link: #c9a66b;
+  --auth-cta-from: #c9a66b;
+  --auth-cta-to: #b8956a;
+  --auth-logo-start: #e8c87a;
+  --auth-logo-mid: #c9a66b;
+  --auth-logo-end: #9a7342;
+}
+
+/* ─── Dark: one consistent shell (aligned across dashboard + auth) ─── */
+.dark {
+  --background: #1a1c24;
+  --foreground: #f4f4f5;
+  --card: #22252b;
+  --card-foreground: #fafafa;
+  --border: rgba(63, 63, 70, 0.85);
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: #e0c068;
+  --accent-foreground: #1e1e2d;
+  --accent-secondary: #d9a35d;
+  --accent-secondary-foreground: #1a1410;
+  --surface-brand: #1e1e2d;
+  --primary: #1a3a5f;
+  --primary-hover: #0f2847;
+  --primary-foreground: #ffffff;
+  --header: rgba(26, 28, 36, 0.95);
+  --header-border: rgba(63, 63, 70, 0.6);
+  --panel: #12141a;
+  --panel-field: #1c1f28;
+  --panel-foreground: #f4f4f5;
+  --panel-muted: #a3a3a8;
+  --auth-canvas: #1a1c24;
+  --auth-hero: #070b14;
+  --auth-hero-deep: #050810;
+  --auth-hero-glow: rgba(30, 58, 95, 0.35);
+  --auth-hero-glow-mid: rgba(15, 40, 71, 0.45);
+  --auth-card: rgba(18, 26, 46, 0.95);
+  --auth-card-border: rgba(255, 255, 255, 0.08);
+  --auth-card-shadow: rgba(0, 0, 0, 0.55);
+  --auth-input: #1a2235;
+  --auth-link: #c9a66b;
+  --auth-cta-from: #c9a66b;
+  --auth-cta-to: #b8956a;
+  --auth-logo-start: #e8c87a;
+  --auth-logo-mid: #c9a66b;
+  --auth-logo-end: #9a7342;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-accent-secondary-foreground: var(--accent-secondary-foreground);
+  --color-surface-brand: var(--surface-brand);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-header: var(--header);
+  --color-header-border: var(--header-border);
+  --color-panel: var(--panel);
+  --color-panel-field: var(--panel-field);
+  --color-panel-foreground: var(--panel-foreground);
+  --color-panel-muted: var(--panel-muted);
+  --color-auth-canvas: var(--auth-canvas);
+  --color-auth-hero: var(--auth-hero);
+  --color-auth-hero-deep: var(--auth-hero-deep);
+  --color-auth-card: var(--auth-card);
+  --color-auth-card-border: var(--auth-card-border);
+  --color-auth-input: var(--auth-input);
+  --color-auth-link: var(--auth-link);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+@keyframes company-add-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(1.25rem) scale(0.97);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes company-cta-shimmer {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-company-add-reveal {
+  animation: company-add-reveal 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.group:hover .company-cta-shimmer-overlay {
+  animation: company-cta-shimmer 2s ease-in-out infinite;
+}
