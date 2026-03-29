@@ -3,6 +3,8 @@ import { AuthenticatedDashboardShell } from "@/components/dashboard/authenticate
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 async function countForUser(
   supabase: Awaited<ReturnType<typeof createClient>>,
   table: string,

@@ -5,7 +5,16 @@ import { getSupabaseAnonKey, getSupabaseUrl } from "./env";
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(getSupabaseUrl(), getSupabaseAnonKey(), {
+  let url: string;
+  let anonKey: string;
+  try {
+    url = getSupabaseUrl();
+    anonKey = getSupabaseAnonKey();
+  } catch {
+    return supabaseResponse;
+  }
+
+  const supabase = createServerClient(url, anonKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
