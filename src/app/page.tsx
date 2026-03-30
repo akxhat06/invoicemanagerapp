@@ -14,7 +14,7 @@ async function countForUser(
 ): Promise<number> {
   const { count, error } = await supabase
     .from(table)
-    .select("*", { count: "planned", head: true })
+    .select("*", { count: "exact", head: true })
     .eq("user_id", userId);
   if (error) {
     return 0;
