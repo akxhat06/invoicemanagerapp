@@ -94,12 +94,6 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
                 <dd className="mt-1 text-foreground">{c.bank_branch}</dd>
               </div>
             ) : null}
-            {c.bank_account_type ? (
-              <div>
-                <dt className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wider">Account type</dt>
-                <dd className="mt-1 text-foreground">{c.bank_account_type}</dd>
-              </div>
-            ) : null}
           </>
         ) : c.bank_details ? (
           <div>

@@ -9,37 +9,21 @@ type Props = {
   companyCount: number;
   /** Retailer invoices you have created */
   retailerCount: number;
+  transportCount: number;
+  paymentCount: number;
+  returnCount: number;
+  commissionCount: number;
 };
-
-function IconBuilding() {
-  return (
-    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M3 21h18M4 21V8l8-4v17M12 21V4l8 4v17M9 9h.01M9 12h.01M9 15h.01M15 9h.01M15 12h.01M15 15h.01"
-      />
-    </svg>
-  );
-}
-
-function IconInvoice() {
-  return (
-    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-      />
-    </svg>
-  );
-}
 
 export function DashboardOverview({
   username,
   email,
   companyCount,
   retailerCount,
+  transportCount,
+  paymentCount,
+  returnCount,
+  commissionCount,
 }: Props) {
   const displayName = useMemo(
     () => formatDisplayName(username, email),
@@ -50,6 +34,15 @@ export function DashboardOverview({
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
+
+  const cards = [
+    { label: "Companies", value: companyCount, hint: "Businesses", tone: "bg-sky-500/10 text-sky-500" },
+    { label: "Retailers", value: retailerCount, hint: "Invoices", tone: "bg-amber-500/10 text-amber-500" },
+    { label: "Transport", value: transportCount, hint: "Entries", tone: "bg-cyan-500/10 text-cyan-500" },
+    { label: "Payments", value: paymentCount, hint: "Received", tone: "bg-emerald-500/10 text-emerald-500" },
+    { label: "Returns", value: returnCount, hint: "Goods return", tone: "bg-rose-500/10 text-rose-500" },
+    { label: "Commission", value: commissionCount, hint: "Entries", tone: "bg-violet-500/10 text-violet-500" },
+  ];
 
   return (
     <>
@@ -78,30 +71,25 @@ export function DashboardOverview({
         </div>
       </section>
 
-      <section className="mt-6 grid grid-cols-2 gap-3">
-        <article className="group border-border bg-card relative flex min-w-0 flex-col overflow-hidden rounded-2xl border p-4 shadow-[0_2px_12px_-2px_rgba(15,23,42,0.08)] ring-1 ring-black/[0.04] transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-4px_rgba(15,23,42,0.12)] dark:shadow-[0_2px_16px_-2px_rgba(0,0,0,0.35)] dark:ring-white/[0.06] dark:hover:shadow-[0_12px_28px_-4px_rgba(0,0,0,0.45)]">
-          <div className="bg-surface-brand/90 absolute inset-x-0 top-0 h-1 rounded-b-full opacity-90 dark:bg-surface-brand" />
-          <div className="text-surface-brand dark:text-accent mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-100 dark:bg-white/10">
-            <IconBuilding />
-          </div>
-          <p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">Companies</p>
-          <p className="text-card-foreground mt-1 text-3xl font-bold tracking-tight tabular-nums sm:text-[2rem]">
-            {companyCount}
-          </p>
-          <p className="text-muted-foreground mt-2 text-xs leading-snug">Businesses you manage</p>
-        </article>
-
-        <article className="group border-border bg-card relative flex min-w-0 flex-col overflow-hidden rounded-2xl border p-4 shadow-[0_2px_12px_-2px_rgba(15,23,42,0.08)] ring-1 ring-black/[0.04] transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-4px_rgba(15,23,42,0.12)] dark:shadow-[0_2px_16px_-2px_rgba(0,0,0,0.35)] dark:ring-white/[0.06] dark:hover:shadow-[0_12px_28px_-4px_rgba(0,0,0,0.45)]">
-          <div className="bg-accent absolute inset-x-0 top-0 h-1 rounded-b-full opacity-95" />
-          <div className="text-accent-foreground mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100/90 dark:bg-accent/20">
-            <IconInvoice />
-          </div>
-          <p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">Retailers</p>
-          <p className="text-card-foreground mt-1 text-3xl font-bold tracking-tight tabular-nums sm:text-[2rem]">
-            {retailerCount}
-          </p>
-          <p className="text-muted-foreground mt-2 text-[11px] leading-snug sm:text-xs">Invoices to retailers</p>
-        </article>
+      <section className="mt-6 grid grid-cols-2 gap-2.5">
+        {cards.map((card) => (
+          <article
+            key={card.label}
+            className="border-border bg-card relative min-w-0 overflow-hidden rounded-xl border px-3 py-2.5 shadow-[0_2px_10px_-3px_rgba(15,23,42,0.14)]"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wider">{card.label}</p>
+                <p className="text-card-foreground mt-1 text-2xl font-bold leading-none tracking-tight tabular-nums">
+                  {card.value}
+                </p>
+              </div>
+              <span className={`inline-flex rounded-md px-2 py-1 text-[10px] font-semibold ${card.tone}`}>
+                {card.hint}
+              </span>
+            </div>
+          </article>
+        ))}
       </section>
     </>
   );

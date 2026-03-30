@@ -6,8 +6,7 @@ export function hasStructuredBank(c: CompanyRow): boolean {
     c.bank_name ||
     c.bank_account_number ||
     c.bank_ifsc ||
-    c.bank_branch ||
-    c.bank_account_type
+    c.bank_branch
   );
 }
 

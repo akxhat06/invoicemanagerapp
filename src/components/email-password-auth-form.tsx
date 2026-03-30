@@ -110,6 +110,7 @@ export function EmailPasswordAuthForm({ mode }: Props) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -118,6 +119,7 @@ export function EmailPasswordAuthForm({ mode }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
+    setErrorMessage(null);
     setLoading(true);
 
     try {
@@ -125,20 +127,20 @@ export function EmailPasswordAuthForm({ mode }: Props) {
 
       if (isSignIn) {
         if (!email.trim()) {
-          toastError("Enter your email or username.");
+          setErrorMessage("Enter your email or username.");
           return;
         }
         if (!password) {
-          toastError("Enter your password.");
+          setErrorMessage("Enter your password.");
           return;
         }
         const { email: resolvedEmail, error: resolveError } = await resolveIdentifierToEmail(supabase, email);
         if (resolveError) {
-          toastError(resolveError);
+          setErrorMessage(resolveError);
           return;
         }
         if (!resolvedEmail) {
-          toastError("Enter your email or username.");
+          setErrorMessage("Enter your email or username.");
           return;
         }
         const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -146,10 +148,9 @@ export function EmailPasswordAuthForm({ mode }: Props) {
           password,
         });
         if (signInError) {
-          toastError(signInError.message);
+          setErrorMessage(signInError.message);
           return;
         }
-        toastSuccess("Signed in successfully.");
         router.push("/");
         router.refresh();
         return;
@@ -334,6 +335,12 @@ export function EmailPasswordAuthForm({ mode }: Props) {
       {passwordResetNotice && isSignIn && (
         <p className="rounded-xl border border-emerald-200/80 bg-emerald-50 px-3 py-2.5 text-center text-sm text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-300">
           Your password was updated. Sign in with your new password.
+        </p>
+      )}
+
+      {errorMessage && (
+        <p className="rounded-xl border border-red-200/80 bg-red-50 px-3 py-2.5 text-center text-sm text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+          {errorMessage}
         </p>
       )}
 

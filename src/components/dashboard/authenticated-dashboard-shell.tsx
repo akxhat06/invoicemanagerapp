@@ -1,6 +1,5 @@
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
-import { ensureUserProfile } from "@/lib/supabase/ensure-profile";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/auth-user";
 import { redirect } from "next/navigation";
 
 /**
@@ -8,35 +7,25 @@ import { redirect } from "next/navigation";
  */
 export async function AuthenticatedDashboardShell({
   children,
+  showWelcomeTour = false,
 }: {
   children: React.ReactNode;
+  showWelcomeTour?: boolean;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   if (!user) {
     redirect("/login");
   }
 
-  await ensureUserProfile(supabase, user);
-
   const username = (user.user_metadata as { username?: string } | undefined)?.username;
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("welcome_tour_completed_at")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  const showWelcomeTour =
-    profile != null && profile.welcome_tour_completed_at == null;
+  const avatarUrl = (user.user_metadata as { avatar_url?: string } | undefined)?.avatar_url;
 
   return (
     <DashboardLayout
       username={username}
       email={user.email ?? ""}
+      avatarUrl={avatarUrl}
       showWelcomeTour={showWelcomeTour}
     >
       {children}

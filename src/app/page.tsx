@@ -1,5 +1,7 @@
 import { DashboardOverview } from "@/components/dashboard/dashboard-overview";
 import { AuthenticatedDashboardShell } from "@/components/dashboard/authenticated-dashboard-shell";
+import { getAuthUser } from "@/lib/supabase/auth-user";
+import { ensureUserProfile } from "@/lib/supabase/ensure-profile";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -12,7 +14,7 @@ async function countForUser(
 ): Promise<number> {
   const { count, error } = await supabase
     .from(table)
-    .select("*", { count: "exact", head: true })
+    .select("*", { count: "planned", head: true })
     .eq("user_id", userId);
   if (error) {
     return 0;
@@ -22,9 +24,7 @@ async function countForUser(
 
 export default async function HomePage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   if (!user) {
     redirect("/login");
@@ -32,19 +32,35 @@ export default async function HomePage() {
 
   const username = (user.user_metadata as { username?: string } | undefined)?.username;
   const email = user.email ?? "";
+  await ensureUserProfile(supabase, user);
 
-  const [companyCount, retailerCount] = await Promise.all([
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("welcome_tour_completed_at")
+    .eq("id", user.id)
+    .maybeSingle();
+  const showWelcomeTour = profile != null && profile.welcome_tour_completed_at == null;
+
+  const [companyCount, retailerCount, transportCount, paymentCount, returnCount, commissionCount] = await Promise.all([
     countForUser(supabase, "companies", user.id),
     countForUser(supabase, "retailer_invoices", user.id),
+    countForUser(supabase, "invoice_transports", user.id),
+    countForUser(supabase, "invoice_payments", user.id),
+    countForUser(supabase, "invoice_goods_returns", user.id),
+    countForUser(supabase, "invoice_commissions", user.id),
   ]);
 
   return (
-    <AuthenticatedDashboardShell>
+    <AuthenticatedDashboardShell showWelcomeTour={showWelcomeTour}>
       <DashboardOverview
         username={username}
         email={email}
         companyCount={companyCount}
         retailerCount={retailerCount}
+        transportCount={transportCount}
+        paymentCount={paymentCount}
+        returnCount={returnCount}
+        commissionCount={commissionCount}
       />
     </AuthenticatedDashboardShell>
   );

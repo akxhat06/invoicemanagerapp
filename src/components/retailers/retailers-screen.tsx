@@ -2,8 +2,11 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { toastError, toastSuccess } from "@/lib/toast";
+import { SwipeCompanyRow } from "@/components/companies/swipe-company-row";
 import type { CompanyRow } from "@/types/company";
 import type { RetailerInvoiceRow } from "@/types/invoice";
+import { DatePicker } from "@/components/ui/date-picker";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -11,6 +14,8 @@ type Props = {
   initialInvoices: RetailerInvoiceRow[];
   initialCompanies: CompanyRow[];
 };
+
+type Step = 1 | 2 | 3;
 
 function formatInr(n: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -70,15 +75,6 @@ function ArrowRightIcon({ className }: { className?: string }) {
   );
 }
 
-function CalendarIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-      <rect x="3" y="5" width="18" height="16" rx="2" />
-      <path d="M16 3v4M8 3v4M3 11h18" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
   const router = useRouter();
   const [invoices, setInvoices] = useState<RetailerInvoiceRow[]>(initialInvoices);
@@ -86,16 +82,18 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
 
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [step, setStep] = useState<Step>(1);
+  const [deletePending, setDeletePending] = useState<RetailerInvoiceRow | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [retailerName, setRetailerName] = useState("");
   const [billDate, setBillDate] = useState(todayISODate());
   const [basicAmount, setBasicAmount] = useState("");
   const [companyId, setCompanyId] = useState("");
   const [gstNo, setGstNo] = useState("");
   const [invoiceAmount, setInvoiceAmount] = useState("");
-  const [transportationAmount, setTransportationAmount] = useState("");
   const [cdAmount, setCdAmount] = useState("");
-  const [paymentReceived, setPaymentReceived] = useState("");
 
   useEffect(() => {
     setInvoices(initialInvoices);
@@ -112,15 +110,12 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
     }
   }, [selectedCompany]);
 
-  const { totalAmount, outstanding, receivedNum } = useMemo(() => {
+  const { totalAmount } = useMemo(() => {
     const inv = parseAmount(invoiceAmount);
-    const trans = parseAmount(transportationAmount);
     const cd = parseAmount(cdAmount);
-    const pay = parseAmount(paymentReceived);
-    const total = Math.max(0, inv + trans - cd);
-    const out = Math.max(0, total - pay);
-    return { totalAmount: total, outstanding: out, receivedNum: pay };
-  }, [invoiceAmount, transportationAmount, cdAmount, paymentReceived]);
+    const total = Math.max(0, inv - cd);
+    return { totalAmount: total };
+  }, [invoiceAmount, cdAmount]);
 
   useEffect(() => {
     document.body.style.overflow = addOpen ? "hidden" : "";
@@ -130,15 +125,15 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
   }, [addOpen]);
 
   function resetForm() {
+    setStep(1);
     setInvoiceNumber("");
+    setRetailerName("");
     setBillDate(todayISODate());
     setBasicAmount("");
     setCompanyId("");
     setGstNo("");
     setInvoiceAmount("");
-    setTransportationAmount("");
     setCdAmount("");
-    setPaymentReceived("");
   }
 
   function openAdd() {
@@ -155,7 +150,11 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
     setAddOpen(false);
   }
 
-  function validate(forSubmit: boolean): boolean {
+  function validateStep1(): boolean {
+    if (!retailerName.trim()) {
+      toastError("Enter retailer name.");
+      return false;
+    }
     if (!invoiceNumber.trim()) {
       toastError("Enter bill / invoice number.");
       return false;
@@ -173,19 +172,17 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
       toastError("GST number must be 15 characters.");
       return false;
     }
-    if (forSubmit && gst.length !== 15) {
+    if (gst.length !== 15) {
       toastError("GST number must be 15 characters.");
       return false;
     }
-    if (forSubmit) {
-      if (parseAmount(invoiceAmount) <= 0) {
-        toastError("Enter invoice amount.");
-        return false;
-      }
-      if (parseAmount(paymentReceived) < 0) {
-        toastError("Payment received cannot be negative.");
-        return false;
-      }
+    return true;
+  }
+
+  function validateStep2(): boolean {
+    if (parseAmount(invoiceAmount) <= 0) {
+      toastError("Enter invoice amount.");
+      return false;
     }
     return true;
   }
@@ -193,23 +190,24 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
   function buildPayload(isDraft: boolean) {
     const basic = parseAmount(basicAmount) || parseAmount(invoiceAmount);
     return {
+      retailer_name: retailerName.trim(),
       invoice_number: invoiceNumber.trim(),
       bill_date: billDate,
       company_id: companyId,
       basic_amount: basic,
       gst_no: gstNo.trim() ? gstNo.trim().toUpperCase() : null,
       invoice_amount: parseAmount(invoiceAmount),
-      transportation_amount: parseAmount(transportationAmount),
+      transportation_amount: 0,
       cd_amount: parseAmount(cdAmount),
       total_amount: totalAmount,
-      payment_received: parseAmount(paymentReceived),
-      outstanding_amount: outstanding,
+      payment_received: 0,
+      outstanding_amount: totalAmount,
       is_draft: isDraft,
     };
   }
 
   async function saveDraft() {
-    if (!validate(false)) return;
+    if (!validateStep1()) return;
     setSaving(true);
     const supabase = createClient();
     const {
@@ -239,7 +237,7 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
   }
 
   async function submitInvoice() {
-    if (!validate(true)) return;
+    if (!validateStep1() || !validateStep2()) return;
     setSaving(true);
     const supabase = createClient();
     const {
@@ -272,6 +270,44 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
     return companies.find((c) => c.id === id)?.name ?? "—";
   }
 
+  function continueStep1() {
+    if (!validateStep1()) return;
+    setStep(2);
+  }
+
+  function continueStep2() {
+    if (!validateStep2()) return;
+    setStep(3);
+  }
+
+  function requestDelete(inv: RetailerInvoiceRow) {
+    if (deletingId) return;
+    setDeletePending(inv);
+  }
+
+  function cancelDelete() {
+    if (deletingId) return;
+    setDeletePending(null);
+  }
+
+  async function confirmDelete() {
+    const target = deletePending;
+    if (!target || deletingId) return;
+    setDeletingId(target.id);
+    setDeletePending(null);
+    const supabase = createClient();
+    const { error } = await supabase.from("retailer_invoices").delete().eq("id", target.id);
+    if (error) {
+      setDeletingId(null);
+      toastError(error.message);
+      return;
+    }
+    setInvoices((prev) => prev.filter((i) => i.id !== target.id));
+    setDeletingId(null);
+    toastSuccess("Retailer invoice deleted.");
+    router.refresh();
+  }
+
   return (
     <div className="relative pb-28">
       <section>
@@ -279,6 +315,9 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
           <div className="bg-accent h-5 w-1 shrink-0 rounded-full" />
           <h2 className="text-base font-bold tracking-tight text-zinc-900 dark:text-white">Retailer invoices</h2>
         </div>
+        <p className="text-muted-foreground mb-4 text-sm">
+          Tap any invoice card to open Transport, Goods Return, Payment, and Commission sections.
+        </p>
 
         {invoices.length === 0 ? (
           <div className="flex flex-col items-center rounded-2xl border border-dashed border-zinc-300 bg-white/80 px-5 py-10 text-center dark:border-zinc-600/80 dark:bg-card/80">
@@ -290,46 +329,94 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
         ) : (
           <ul className="flex flex-col gap-3">
             {invoices.map((inv) => (
-              <li
+              <SwipeCompanyRow
                 key={inv.id}
-                className="border-border bg-card rounded-2xl border p-4 shadow-sm"
+                onSwipeDelete={() => requestDelete(inv)}
+                disabled={deletingId === inv.id || !!deletingId}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-zinc-900 dark:text-white">{inv.invoice_number}</p>
-                    <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-                      {companyName(inv.company_id)} · {inv.bill_date}
-                    </p>
+                <Link
+                  href={`/retailers/${inv.id}`}
+                  className={`block p-4 ${
+                    deletingId === inv.id ? "pointer-events-none opacity-60" : ""
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-zinc-900 dark:text-white">
+                        {inv.retailer_name?.trim() || "Retailer"}
+                      </p>
+                      <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+                        {inv.invoice_number} · {companyName(inv.company_id)} · {inv.bill_date}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                        inv.is_draft
+                          ? "bg-amber-500/20 text-amber-700 dark:text-amber-400"
+                          : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400"
+                      }`}
+                    >
+                      {inv.is_draft ? "Draft" : "Submitted"}
+                    </span>
                   </div>
-                  <span
-                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                      inv.is_draft
-                        ? "bg-amber-500/20 text-amber-700 dark:text-amber-400"
-                        : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400"
-                    }`}
-                  >
-                    {inv.is_draft ? "Draft" : "Submitted"}
-                  </span>
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-600/60">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">Total</p>
-                    <p className="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-white">{formatInr(Number(inv.total_amount))}</p>
+                  <div className="mt-3 grid grid-cols-3 gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-600/60">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">Total</p>
+                      <p className="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-white">{formatInr(Number(inv.total_amount))}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Received</p>
+                      <p className="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-white">{formatInr(Number(inv.payment_received))}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">Due</p>
+                      <p className="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-white">{formatInr(Number(inv.outstanding_amount))}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Received</p>
-                    <p className="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-white">{formatInr(Number(inv.payment_received))}</p>
+                  <div className="mt-3 flex justify-end">
+                    <span className="inline-flex rounded-md border border-amber-300/70 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:border-amber-700/60 dark:bg-amber-900/30 dark:text-amber-200">
+                      Manage Flow
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">Due</p>
-                    <p className="mt-0.5 text-sm font-semibold text-zinc-900 dark:text-white">{formatInr(Number(inv.outstanding_amount))}</p>
-                  </div>
-                </div>
-              </li>
+                </Link>
+              </SwipeCompanyRow>
             ))}
           </ul>
         )}
       </section>
+
+      {deletePending && (
+        <>
+          <button
+            type="button"
+            aria-label="Close"
+            className="fixed inset-0 z-[95] bg-black/55 backdrop-blur-[2px]"
+            onClick={cancelDelete}
+          />
+          <div className="border-border bg-card fixed left-1/2 top-1/2 z-[100] w-[min(92vw,22rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border p-4 shadow-2xl">
+            <h3 className="text-base font-bold">Delete retailer invoice?</h3>
+            <p className="text-muted-foreground mt-2 text-sm">
+              This will also delete mapped Transport, Goods Return, Payments, and Commission records.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={cancelDelete}
+                className="border-border text-foreground flex-1 rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted/70"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDelete()}
+                className="flex-1 rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       <button
         type="button"
@@ -356,11 +443,31 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
             >
               <ChevronLeftIcon />
             </button>
-            <h2 className="text-panel-foreground px-12 text-center text-lg font-bold">New Invoice</h2>
+            <h2 className="text-panel-foreground px-12 text-center text-lg font-bold">
+              {step === 1 ? "Retailer Details" : step === 2 ? "Invoice Amounts" : "Review & Submit"}
+            </h2>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
             <div className="space-y-4">
+              {step === 1 && (
+                <>
+              <div>
+                <label htmlFor="inv-retailer" className={panelLabel}>
+                  Retailer Name <span className="text-red-400">*</span>
+                </label>
+                <input
+                  id="inv-retailer"
+                  type="text"
+                  value={retailerName}
+                  onChange={(e) => setRetailerName(e.target.value)}
+                  disabled={saving}
+                  className={panelInput}
+                  placeholder="Enter retailer name"
+                  autoComplete="organization"
+                />
+              </div>
+
               <div>
                 <label htmlFor="inv-no" className={panelLabel}>
                   Bill / Invoice No <span className="text-red-400">*</span>
@@ -381,19 +488,7 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
                 <label htmlFor="inv-date" className={panelLabel}>
                   Bill Date <span className="text-red-400">*</span>
                 </label>
-                <div className="relative">
-                  <input
-                    id="inv-date"
-                    type="date"
-                    value={billDate}
-                    onChange={(e) => setBillDate(e.target.value)}
-                    disabled={saving}
-                    className={`${panelInput} pr-11 [color-scheme:dark]`}
-                  />
-                  <span className="text-panel-muted pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
-                    <CalendarIcon />
-                  </span>
-                </div>
+                <DatePicker value={billDate} onChange={setBillDate} disabled={saving} className={panelInput} />
               </div>
 
               <div>
@@ -463,7 +558,11 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
                 />
                 <p className="text-panel-muted mt-1.5 text-xs">15 characters</p>
               </div>
+                </>
+              )}
 
+              {step === 2 && (
+                <>
               <div className="relative py-2">
                 <div className="border-border absolute inset-x-0 top-1/2 border-t" />
                 <span className="text-panel-muted relative mx-auto block w-fit bg-panel px-3 text-center text-[11px] font-semibold uppercase tracking-[0.12em]">
@@ -491,22 +590,6 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
               </div>
 
               <div>
-                <label htmlFor="inv-trans" className={panelLabel}>
-                  Transportation Amount
-                </label>
-                <input
-                  id="inv-trans"
-                  type="text"
-                  inputMode="decimal"
-                  value={transportationAmount}
-                  onChange={(e) => setTransportationAmount(e.target.value)}
-                  disabled={saving}
-                  className={panelInput}
-                  placeholder="0"
-                />
-              </div>
-
-              <div>
                 <label className={panelLabel}>Total Amount</label>
                 <div className="bg-panel-field border-border flex items-center justify-between rounded-lg border px-3.5 py-3">
                   <span className="text-panel-muted text-[11px] font-semibold uppercase tracking-wide">Auto</span>
@@ -529,41 +612,10 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
                   placeholder="0"
                 />
               </div>
+                </>
+              )}
 
-              <div className="relative py-2">
-                <div className="border-border absolute inset-x-0 top-1/2 border-t" />
-                <span className="text-panel-muted relative mx-auto block w-fit bg-panel px-3 text-center text-[11px] font-semibold uppercase tracking-[0.12em]">
-                  Payment details
-                </span>
-              </div>
-
-              <div>
-                <label htmlFor="inv-pay" className={panelLabel}>
-                  Payment Received Amount <span className="text-red-400">*</span>
-                </label>
-                <div className="relative">
-                  <span className="text-panel-muted pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm">₹</span>
-                  <input
-                    id="inv-pay"
-                    type="text"
-                    inputMode="decimal"
-                    value={paymentReceived}
-                    onChange={(e) => setPaymentReceived(e.target.value)}
-                    disabled={saving}
-                    className={`${panelInput} pl-9`}
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className={panelLabel}>Outstanding Amount</label>
-                <div className="bg-panel-field border-border flex items-center justify-between rounded-lg border px-3.5 py-3">
-                  <span className="text-panel-muted text-[11px] font-semibold uppercase tracking-wide">Auto</span>
-                  <span className="font-mono text-sm font-semibold">{formatInr(outstanding)}</span>
-                </div>
-              </div>
-
+              {step === 3 && (
               <div className="grid grid-cols-3 gap-2 pt-2">
                 <div className="border-border bg-panel-field rounded-xl border px-2 py-3 text-center">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400">Total</p>
@@ -571,13 +623,14 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
                 </div>
                 <div className="border-border bg-panel-field rounded-xl border px-2 py-3 text-center">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Received</p>
-                  <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-white">{formatInr(receivedNum)}</p>
+                  <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-white">{formatInr(0)}</p>
                 </div>
                 <div className="border-border bg-panel-field rounded-xl border px-2 py-3 text-center">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">Due</p>
-                  <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-white">{formatInr(outstanding)}</p>
+                  <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-white">{formatInr(totalAmount)}</p>
                 </div>
               </div>
+              )}
             </div>
           </div>
 
@@ -585,21 +638,21 @@ export function RetailersScreen({ initialInvoices, initialCompanies }: Props) {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={saveDraft}
+                onClick={step === 1 ? saveDraft : () => setStep((s) => (Math.max(1, s - 1) as Step))}
                 disabled={saving}
                 className="border-border text-panel-foreground hover:bg-muted flex flex-1 items-center justify-center rounded-lg border bg-transparent px-4 py-3.5 text-sm font-semibold transition disabled:opacity-50"
               >
-                Save Draft
+                {step === 1 ? "Save Draft" : "Back"}
               </button>
               <button
                 type="button"
-                onClick={submitInvoice}
+                onClick={step === 1 ? continueStep1 : step === 2 ? continueStep2 : submitInvoice}
                 disabled={saving}
                 className="bg-accent-secondary text-accent-secondary-foreground flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-3.5 text-sm font-semibold transition hover:brightness-105 disabled:opacity-50"
               >
                 {saving ? "Saving…" : (
                   <>
-                    Submit
+                    {step === 3 ? "Submit" : "Continue"}
                     <ArrowRightIcon />
                   </>
                 )}
