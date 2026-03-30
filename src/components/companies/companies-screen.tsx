@@ -254,7 +254,7 @@ export function CompaniesScreen({ initialCompanies }: Props) {
   const [confirmAccountNumber, setConfirmAccountNumber] = useState("");
   const [showAccountNumber, setShowAccountNumber] = useState(false);
   const [bankIfsc, setBankIfsc] = useState("");
-  const [bankAccountType, setBankAccountType] = useState<"" | "Savings" | "Current">("");
+  const [bankBranch, setBankBranch] = useState("");
 
   const [consentAccepted, setConsentAccepted] = useState(false);
 
@@ -302,7 +302,7 @@ export function CompaniesScreen({ initialCompanies }: Props) {
     setConfirmAccountNumber("");
     setShowAccountNumber(false);
     setBankIfsc("");
-    setBankAccountType("");
+    setBankBranch("");
     setConsentAccepted(false);
   }
 
@@ -377,8 +377,8 @@ export function CompaniesScreen({ initialCompanies }: Props) {
       bank_name: trimNull(bankName),
       bank_account_number: trimNull(bankAccountNumber),
       bank_ifsc: trimNull(bankIfsc),
-      bank_branch: null,
-      bank_account_type: bankAccountType ? bankAccountType : null,
+      bank_branch: trimNull(bankBranch),
+      bank_account_type: null,
       is_draft: isDraft,
     };
   }
@@ -484,10 +484,6 @@ export function CompaniesScreen({ initialCompanies }: Props) {
       toastError("Account holder name is required.");
       return false;
     }
-    if (bankAccountType !== "Savings" && bankAccountType !== "Current") {
-      toastError("Select Savings or Current account.");
-      return false;
-    }
     return true;
   }
 
@@ -578,8 +574,11 @@ export function CompaniesScreen({ initialCompanies }: Props) {
       <section>
         <div className="mb-4 flex items-center gap-2.5">
           <div className="bg-accent h-5 w-1 shrink-0 rounded-full" />
-          <h2 className="text-base font-bold tracking-tight text-zinc-900 dark:text-white">Your companies</h2>
+          <h2 className="text-base font-bold tracking-tight text-zinc-900 dark:text-white">Companies</h2>
         </div>
+        <p className="text-muted-foreground mb-4 text-sm">
+          Manage company profiles and bank details from one place.
+        </p>
 
         {companies.length === 0 ? (
           <div className="flex flex-col items-center rounded-2xl border border-dashed border-zinc-300 bg-white/80 px-5 py-10 text-center dark:border-zinc-600/80 dark:bg-card/80">
@@ -1021,35 +1020,18 @@ export function CompaniesScreen({ initialCompanies }: Props) {
                 </div>
 
                 <div>
-                  <p className={panelLabel}>
-                    Account type <span className="text-red-400">*</span>
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    {(["Savings", "Current"] as const).map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => setBankAccountType(opt)}
-                        disabled={saving}
-                        className={`flex flex-col items-center gap-2 rounded-xl border px-4 py-4 text-sm font-semibold transition ${
-                          bankAccountType === opt
-                            ? "border-amber-500/80 bg-amber-500/15 text-amber-900 ring-1 ring-amber-500/40 dark:text-amber-200"
-                            : "bg-panel-field text-panel-muted border-border hover:border-zinc-400 dark:border-zinc-700/90 dark:text-zinc-300 dark:hover:border-zinc-600"
-                        }`}
-                      >
-                        <span
-                          className={`flex h-5 w-5 shrink-0 rounded-full border-2 ${
-                            bankAccountType === opt ? "border-amber-400 bg-amber-400" : "border-zinc-500"
-                          }`}
-                        >
-                          {bankAccountType === opt ? (
-                            <span className="m-auto block h-2 w-2 rounded-full bg-amber-500" />
-                          ) : null}
-                        </span>
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
+                  <label htmlFor="b-branch" className={panelLabel}>
+                    Branch
+                  </label>
+                  <input
+                    id="b-branch"
+                    type="text"
+                    value={bankBranch}
+                    onChange={(e) => setBankBranch(e.target.value)}
+                    disabled={saving}
+                    className={panelInput}
+                    placeholder="Branch name"
+                  />
                 </div>
 
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900/45 dark:bg-emerald-950/35">
@@ -1168,14 +1150,13 @@ export function CompaniesScreen({ initialCompanies }: Props) {
                         </p>
                         <p className="text-panel-foreground mt-1">{bankAccountHolder.trim() || "—"}</p>
                       </div>
-                    </div>
-                    {bankAccountType ? (
-                      <div className="mt-4">
-                        <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-900 ring-1 ring-amber-300/80 dark:bg-amber-900/40 dark:text-amber-200/95 dark:ring-amber-700/50">
-                          {bankAccountType} Account
-                        </span>
+                      <div>
+                        <p className="text-panel-muted text-[10px] font-semibold uppercase tracking-wider">
+                          Branch
+                        </p>
+                        <p className="text-panel-foreground mt-1">{bankBranch.trim() || "—"}</p>
                       </div>
-                    ) : null}
+                    </div>
                   </div>
                 </div>
 

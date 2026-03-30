@@ -1,11 +1,12 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-type NavKey = "overview" | "companies" | "retailers";
+type NavKey = "overview" | "companies" | "retailers" | "transport" | "payments" | "returns" | "commission";
 
 type Props = {
   open: boolean;
@@ -13,6 +14,7 @@ type Props = {
   displayName: string;
   email: string;
   avatarInitial: string;
+  avatarUrl?: string;
   pathname: string;
 };
 
@@ -82,6 +84,90 @@ function IconRetailers({ className }: { className?: string }) {
   );
 }
 
+function IconPayments({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 7h18M3 12h18M3 17h18" />
+      <circle cx="7" cy="7" r="1" fill="currentColor" stroke="none" />
+      <circle cx="7" cy="12" r="1" fill="currentColor" stroke="none" />
+      <circle cx="7" cy="17" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function IconTransport({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="1.5" y="6" width="14" height="10" rx="2" />
+      <path d="M15.5 9h3l2.5 2.5V16h-5.5" />
+      <circle cx="6" cy="17.5" r="1.5" />
+      <circle cx="17.5" cy="17.5" r="1.5" />
+    </svg>
+  );
+}
+
+function IconReturns({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 7h14a4 4 0 110 8H9" />
+      <path d="M9 11l-4 4 4 4" />
+    </svg>
+  );
+}
+
+function IconCommission({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="8" />
+      <path d="M10 9.5c0-1 1-1.8 2.2-1.8 1.1 0 2 .6 2 1.6 0 1.2-1 1.5-2.2 1.8-1.2.3-2.2.7-2.2 1.9 0 1.1 1 1.8 2.3 1.8 1.2 0 2.2-.7 2.2-1.8" />
+    </svg>
+  );
+}
+
 function LogOutIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -110,7 +196,19 @@ function isNavActive(pathname: string, key: NavKey): boolean {
   if (key === "companies") {
     return pathname.startsWith("/companies");
   }
-  return pathname.startsWith("/retailers");
+  if (key === "retailers") {
+    return pathname.startsWith("/retailers");
+  }
+  if (key === "transport") {
+    return pathname.startsWith("/transport");
+  }
+  if (key === "payments") {
+    return pathname.startsWith("/payments");
+  }
+  if (key === "returns") {
+    return pathname.startsWith("/returns");
+  }
+  return pathname.startsWith("/commission");
 }
 
 const NAV_CONFIG: {
@@ -139,11 +237,43 @@ const NAV_CONFIG: {
   },
   {
     key: "retailers",
-    label: "Invoices",
+    label: "Retailer",
     href: "/retailers",
     Icon: IconRetailers,
     accent: "text-orange-600 dark:text-orange-400",
     iconBg: "bg-orange-100 dark:bg-orange-500/15",
+  },
+  {
+    key: "payments",
+    label: "Payments",
+    href: "/payments",
+    Icon: IconPayments,
+    accent: "text-indigo-600 dark:text-indigo-400",
+    iconBg: "bg-indigo-100 dark:bg-indigo-500/15",
+  },
+  {
+    key: "transport",
+    label: "Transport",
+    href: "/transport",
+    Icon: IconTransport,
+    accent: "text-cyan-600 dark:text-cyan-400",
+    iconBg: "bg-cyan-100 dark:bg-cyan-500/15",
+  },
+  {
+    key: "returns",
+    label: "Returns",
+    href: "/returns",
+    Icon: IconReturns,
+    accent: "text-rose-600 dark:text-rose-400",
+    iconBg: "bg-rose-100 dark:bg-rose-500/15",
+  },
+  {
+    key: "commission",
+    label: "Commission",
+    href: "/commission",
+    Icon: IconCommission,
+    accent: "text-violet-600 dark:text-violet-400",
+    iconBg: "bg-violet-100 dark:bg-violet-500/15",
   },
 ];
 
@@ -153,6 +283,7 @@ export function DashboardSidebar({
   displayName,
   email,
   avatarInitial,
+  avatarUrl,
   pathname,
 }: Props) {
   const router = useRouter();
@@ -196,8 +327,16 @@ export function DashboardSidebar({
             </svg>
           </button>
           <div className="flex items-start gap-3 pr-9">
-            <div className="bg-accent text-accent-foreground flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-sm ring-2 ring-black/5 dark:ring-white/10">
-              {avatarInitial}
+            <div className="bg-accent text-accent-foreground flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold shadow-sm ring-2 ring-black/5 dark:ring-white/10">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt="Profile"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                avatarInitial
+              )}
             </div>
             <div className="min-w-0 pt-0.5">
               <p className="truncate text-[15px] font-semibold leading-tight text-zinc-900 dark:text-white">
@@ -239,6 +378,12 @@ export function DashboardSidebar({
           </nav>
 
           <div className="border-border mt-auto shrink-0 border-t px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+            <div className="mb-2">
+              <div className="flex w-full items-center justify-between rounded-lg border border-border bg-card/60 px-3 py-2">
+                <span className="text-sm font-medium text-muted-foreground">Theme</span>
+                <ThemeToggle />
+              </div>
+            </div>
             <button
               type="button"
               onClick={handleLogout}
