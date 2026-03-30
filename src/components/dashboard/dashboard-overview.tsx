@@ -1,13 +1,13 @@
 "use client";
 
 import { firstName, formatDisplayName } from "@/lib/display-name";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 type Props = {
   username: string | undefined;
   email: string;
   companyCount: number;
-  /** Retailer invoices you have created */
+  /** Retailer profiles you have created */
   retailerCount: number;
   transportCount: number;
   paymentCount: number;
@@ -25,6 +25,7 @@ export function DashboardOverview({
   returnCount,
   commissionCount,
 }: Props) {
+  const [exporting, setExporting] = useState(false);
   const displayName = useMemo(
     () => formatDisplayName(username, email),
     [username, email]
@@ -37,12 +38,34 @@ export function DashboardOverview({
 
   const cards = [
     { label: "Companies", value: companyCount, hint: "Businesses", tone: "bg-sky-500/10 text-sky-500" },
-    { label: "Retailers", value: retailerCount, hint: "Invoices", tone: "bg-amber-500/10 text-amber-500" },
+    { label: "Retailers", value: retailerCount, hint: "Profiles", tone: "bg-amber-500/10 text-amber-500" },
     { label: "Transport", value: transportCount, hint: "Entries", tone: "bg-cyan-500/10 text-cyan-500" },
     { label: "Payments", value: paymentCount, hint: "Received", tone: "bg-emerald-500/10 text-emerald-500" },
     { label: "Returns", value: returnCount, hint: "Goods return", tone: "bg-rose-500/10 text-rose-500" },
     { label: "Commission", value: commissionCount, hint: "Entries", tone: "bg-violet-500/10 text-violet-500" },
   ];
+
+  async function downloadOverviewExcel() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const res = await fetch("/api/overview-export", { method: "GET" });
+      if (!res.ok) {
+        throw new Error("Failed to export");
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `overview-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <>
@@ -55,7 +78,7 @@ export function DashboardOverview({
           className="pointer-events-none absolute -bottom-8 left-1/3 h-28 w-52 rounded-full bg-primary/35 blur-3xl"
           aria-hidden
         />
-        <div className="relative flex gap-4">
+        <div className="relative flex items-start gap-4">
           <div
             className="bg-accent w-1.5 shrink-0 self-stretch rounded-full shadow-[0_0_24px_rgba(224,192,104,0.45)]"
             style={{ minHeight: "4.75rem" }}
@@ -68,6 +91,14 @@ export function DashboardOverview({
               Here&apos;s your overview for today
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => void downloadOverviewExcel()}
+            disabled={exporting}
+            className="rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {exporting ? "Exporting..." : "Download"}
+          </button>
         </div>
       </section>
 

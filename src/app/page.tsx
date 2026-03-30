@@ -43,7 +43,7 @@ export default async function HomePage() {
 
   const [companyCount, retailerCount, transportCount, paymentCount, returnCount, commissionCount] = await Promise.all([
     countForUser(supabase, "companies", user.id),
-    countForUser(supabase, "retailer_invoices", user.id),
+    countForUser(supabase, "retailers", user.id),
     countForUser(supabase, "invoice_transports", user.id),
     countForUser(supabase, "invoice_payments", user.id),
     countForUser(supabase, "invoice_goods_returns", user.id),

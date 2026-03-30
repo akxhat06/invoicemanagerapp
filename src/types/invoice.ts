@@ -2,11 +2,15 @@ export type RetailerInvoiceRow = {
   id: string;
   user_id: string;
   company_id: string;
+  retailer_id: string | null;
   retailer_name: string | null;
+  retailer_address: string | null;
+  contact_no: string | null;
   invoice_number: string;
   bill_date: string;
   basic_amount: number;
   gst_no: string | null;
+  gst_amount: number;
   invoice_amount: number;
   transportation_amount: number;
   cd_amount: number;
