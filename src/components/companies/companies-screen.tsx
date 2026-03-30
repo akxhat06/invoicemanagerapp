@@ -475,11 +475,6 @@ export function CompaniesScreen({ initialCompanies }: Props) {
       toastError("Account numbers do not match.");
       return false;
     }
-    const ifsc = bankIfsc.trim().toUpperCase();
-    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
-      toastError("IFSC must be 11 characters: first 4 letters, then 7 alphanumeric (e.g. HDFC0001234).");
-      return false;
-    }
     if (!bankAccountHolder.trim()) {
       toastError("Account holder name is required.");
       return false;
@@ -986,7 +981,7 @@ export function CompaniesScreen({ initialCompanies }: Props) {
 
                 <div>
                   <label htmlFor="b-ifsc" className={panelLabel}>
-                    IFSC code <span className="text-red-400">*</span>
+                    IFSC code
                   </label>
                   <input
                     id="b-ifsc"
@@ -995,12 +990,8 @@ export function CompaniesScreen({ initialCompanies }: Props) {
                     onChange={(e) => setBankIfsc(e.target.value.toUpperCase().replace(/\s/g, ""))}
                     disabled={saving}
                     className={`${panelInput} font-mono uppercase`}
-                    placeholder="HDFC0001234"
-                    maxLength={11}
+                    placeholder="e.g. HDFC0001234"
                   />
-                  <p className="text-panel-muted mt-1.5 text-xs">
-                    11 characters (first 4 letters, then 7 digits / alphanumeric)
-                  </p>
                 </div>
 
                 <div>
