@@ -1,4 +1,3 @@
-import { AuthThemeToggle } from "@/components/auth/auth-theme-toggle";
 import { AuthViewTransition } from "@/components/auth/auth-view-transition";
 import type { ReactNode } from "react";
 
@@ -106,12 +105,6 @@ export function AuthLoginShell({ children, flow = "signin", formVerticalAlign = 
       </aside>
 
       <main className="login-split-main relative flex min-h-0 flex-1 flex-col md:h-full md:max-h-full md:overflow-y-auto">
-        <div className="absolute right-4 top-[max(0.75rem,env(safe-area-inset-top))] z-20 sm:right-8 sm:top-8">
-          <div className="login-split-theme-toggle rounded-xl border border-zinc-200/90 bg-white/90 shadow-sm backdrop-blur-sm">
-            <AuthThemeToggle />
-          </div>
-        </div>
-
         <div
           className={`flex min-h-0 flex-1 flex-col px-4 pb-3 pt-4 sm:px-6 sm:pb-6 sm:pt-6 md:px-10 md:pb-4 md:pt-5 lg:px-12 lg:pb-5 lg:pt-6 ${formVerticalAlign === "start" ? "justify-start" : "justify-center"}`}
         >

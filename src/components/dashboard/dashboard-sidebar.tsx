@@ -1,7 +1,6 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { ThemeToggle } from "@/components/theme-toggle";
 import {
   DASHBOARD_NAV_ITEMS,
   isDashboardNavActive,
@@ -82,7 +81,7 @@ const ICONS: Record<DashboardNavKey, typeof IconDashboard> = {
   settings: IconSettings,
 };
 
-const ACCENT = "#a40e4c";
+const ACCENT = "#a1a1aa";
 
 export function DashboardSidebar({
   displayName,
@@ -179,10 +178,6 @@ export function DashboardSidebar({
             <p className="truncate text-xs text-white/45">Admin</p>
           </div>
         </Link>
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2">
-          <span className="text-xs font-medium text-white/50">Theme</span>
-          <ThemeToggle />
-        </div>
         <button
           type="button"
           onClick={handleLogout}

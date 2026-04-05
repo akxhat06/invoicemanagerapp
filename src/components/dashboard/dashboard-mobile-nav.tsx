@@ -66,7 +66,7 @@ const ICONS: Record<DashboardNavKey, typeof IconDashboard> = {
   settings: IconSettings,
 };
 
-const ACCENT = "#a40e4c";
+const ACCENT = "#e4e4e7";
 
 export function DashboardMobileNav({ pathname, invoiceBadgeCount }: Props) {
   return (

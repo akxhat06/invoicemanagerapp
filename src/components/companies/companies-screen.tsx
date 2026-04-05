@@ -1,14 +1,10 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import {
-  bankSummaryLine,
-  companyUiStatus,
-  gstDisplayLine,
-  type CompanyUiStatus,
-} from "@/lib/company-display";
+import { bankSummaryLine, gstDisplayLine } from "@/lib/company-display";
 import { INDIAN_BANKS } from "@/lib/indian-banks";
 import { INDIAN_STATES_AND_UT } from "@/lib/indian-states";
+import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import { SwipeCompanyRow } from "@/components/companies/swipe-company-row";
 import type { CompanyRow } from "@/types/company";
@@ -25,21 +21,6 @@ type Props = {
 function trimNull(s: string): string | null {
   const v = s.trim();
   return v === "" ? null : v;
-}
-
-function StatusBadge({ status }: { status: CompanyUiStatus }) {
-  if (status === "active") {
-    return (
-      <span className="inline-flex shrink-0 items-center rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-        Active
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex shrink-0 items-center rounded-full bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
-      Pending
-    </span>
-  );
 }
 
 function DraftBadge() {
@@ -362,18 +343,23 @@ export function CompaniesScreen({ initialCompanies }: Props) {
   }
 
   function buildPayload(isDraft: boolean) {
+    const dev = skipRequiredFieldValidation();
+    const resolvedName = name.trim() || (dev ? "Untitled (dev)" : "");
     const digits = phoneDigits.replace(/\D/g, "").slice(0, 10);
     const phone = digits.length === 10 ? `+91${digits}` : null;
     return {
-      name: name.trim(),
+      name: resolvedName,
       gst_no: trimNull(gstNo),
       phone_no: phone,
+      telephone: null,
+      alternative_phone: null,
+      mop: null,
       email: trimNull(email),
       registered_address: trimNull(registeredAddress),
       city: trimNull(city),
       state: state.trim() ? state.trim() : null,
       pin_code: trimNull(pinCode),
-      bank_account_holder: trimNull(bankAccountHolder),
+      bank_account_holder: trimNull(bankAccountHolder || (dev ? resolvedName : "")),
       bank_name: trimNull(bankName),
       bank_account_number: trimNull(bankAccountNumber),
       bank_ifsc: trimNull(bankIfsc),
@@ -384,7 +370,7 @@ export function CompaniesScreen({ initialCompanies }: Props) {
   }
 
   async function saveDraft() {
-    if (!name.trim()) {
+    if (!skipRequiredFieldValidation() && !name.trim()) {
       toastError("Enter a company name to save a draft.");
       return;
     }
@@ -438,6 +424,7 @@ export function CompaniesScreen({ initialCompanies }: Props) {
   }
 
   function validateStep1ForContinue(): boolean {
+    if (skipRequiredFieldValidation()) return true;
     if (!name.trim()) {
       toastError("Company name is required.");
       return false;
@@ -461,6 +448,7 @@ export function CompaniesScreen({ initialCompanies }: Props) {
   }
 
   function validateStep2ForContinue(): boolean {
+    if (skipRequiredFieldValidation()) return true;
     if (!bankName.trim()) {
       toastError("Select your bank.");
       return false;
@@ -494,7 +482,7 @@ export function CompaniesScreen({ initialCompanies }: Props) {
   }
 
   async function completeRegistration() {
-    if (!consentAccepted) {
+    if (!skipRequiredFieldValidation() && !consentAccepted) {
       toastError(
         "Please confirm that the information is accurate and agree to the Terms & Conditions and Privacy Policy."
       );
@@ -589,7 +577,6 @@ export function CompaniesScreen({ initialCompanies }: Props) {
         ) : (
           <ul className="flex flex-col gap-4">
             {companies.map((c) => {
-              const status = companyUiStatus(c);
               const phoneDisplay = c.phone_no?.trim() || "—";
               const bankLine = bankSummaryLine(c);
               const isDeleting = deletingId === c.id;
@@ -610,7 +597,7 @@ export function CompaniesScreen({ initialCompanies }: Props) {
                         {c.name}
                       </h3>
                       <div className="flex shrink-0 items-center gap-1.5">
-                        {c.is_draft === true ? <DraftBadge /> : <StatusBadge status={status} />}
+                        {c.is_draft === true ? <DraftBadge /> : null}
                         <ChevronRightIcon className="text-zinc-400 dark:text-zinc-500" />
                       </div>
                     </div>

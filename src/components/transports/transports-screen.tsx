@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { InvoiceTransportRow, RetailerInvoiceRow } from "@/types/invoice";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -89,9 +90,18 @@ export function TransportsScreen({ initialTransports, initialInvoices, preselect
   }
 
   async function saveTransport() {
-    const amt = toNum(amount);
-    if (!invoiceId) return toastError("Select invoice.");
-    if (!transportName.trim()) return toastError("Enter transport name.");
+    let invId = invoiceId;
+    if (!invId && skipRequiredFieldValidation() && invoices[0]) {
+      invId = invoices[0].id;
+    }
+    let amt = toNum(amount);
+    let tname = transportName.trim();
+    if (skipRequiredFieldValidation()) {
+      if (!tname) tname = "Dev transport";
+      if (amt <= 0) amt = 0.01;
+    }
+    if (!invId) return toastError("Select invoice.");
+    if (!tname) return toastError("Enter transport name.");
     if (amt <= 0) return toastError("Enter transport amount.");
     setSaving(true);
     const supabase = createClient();
@@ -104,8 +114,8 @@ export function TransportsScreen({ initialTransports, initialInvoices, preselect
     }
     const payload = {
       user_id: user.id,
-      invoice_id: invoiceId,
-      transport_name: transportName.trim(),
+      invoice_id: invId,
+      transport_name: tname,
       lr_no: lrNo.trim() || null,
       lr_date: lrDate || null,
       amount: amt,
@@ -121,8 +131,8 @@ export function TransportsScreen({ initialTransports, initialInvoices, preselect
 
     // Keep invoice summary in sync.
     const [sumRes, invRes] = await Promise.all([
-      supabase.from("invoice_transports").select("amount").eq("invoice_id", invoiceId),
-      supabase.from("retailer_invoices").select("invoice_amount, cd_amount, payment_received").eq("id", invoiceId).single(),
+      supabase.from("invoice_transports").select("amount").eq("invoice_id", invId),
+      supabase.from("retailer_invoices").select("invoice_amount, cd_amount, payment_received").eq("id", invId).single(),
     ]);
     if (!sumRes.error && !invRes.error && invRes.data) {
       const transportTotal = (sumRes.data ?? []).reduce((a, r) => a + Number(r.amount || 0), 0);
@@ -139,7 +149,7 @@ export function TransportsScreen({ initialTransports, initialInvoices, preselect
           outstanding_amount: outstanding,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", invoiceId);
+        .eq("id", invId);
     }
 
     setTransports((p) =>

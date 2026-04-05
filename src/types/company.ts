@@ -4,6 +4,10 @@ export type CompanyRow = {
   name: string;
   gst_no: string | null;
   phone_no: string | null;
+  /** Landline / office line (free text) */
+  telephone?: string | null;
+  /** Secondary mobile (+91), optional — 20260330210000 migration */
+  alternative_phone?: string | null;
   email: string | null;
   registered_address: string | null;
   city: string | null;

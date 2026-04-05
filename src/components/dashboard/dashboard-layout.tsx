@@ -70,12 +70,12 @@ export function DashboardLayout({
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-black/[0.06] bg-[#f3eaf4]/95 px-4 py-3 shadow-sm backdrop-blur-md dark:border-black/[0.04] dark:bg-[#f7f7f9]/95 md:hidden">
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.08] bg-[#0c0c0f]/95 px-4 py-3 shadow-sm backdrop-blur-md md:hidden">
           {isProfilePage ? (
             <button
               type="button"
               onClick={() => router.back()}
-              className="relative z-10 inline-flex h-10 items-center gap-1 rounded-xl px-2.5 text-zinc-700 transition hover:bg-black/[0.04]"
+              className="relative z-10 inline-flex h-10 items-center gap-1 rounded-xl px-2.5 text-zinc-200 transition hover:bg-white/[0.06]"
               aria-label="Go back"
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -85,7 +85,7 @@ export function DashboardLayout({
             </button>
           ) : (
             <img
-              src="/logo3-light.svg"
+              src="/logo3-dark.svg"
               alt="Vishwa Shree Enterprises"
               width={200}
               height={200}
@@ -93,13 +93,13 @@ export function DashboardLayout({
               className="relative z-10 h-10 w-auto max-w-[7.5rem] shrink-0 object-contain object-left"
             />
           )}
-          <h1 className="absolute left-1/2 top-1/2 max-w-[50%] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[17px] font-bold tracking-tight text-zinc-900">
+          <h1 className="absolute left-1/2 top-1/2 max-w-[50%] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[17px] font-bold tracking-tight text-white">
             {title}
           </h1>
           <div className="relative z-10 flex items-center gap-2">
             <Link
               href="/profile"
-              className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-zinc-200 text-sm font-bold text-zinc-800 transition hover:opacity-90 dark:bg-zinc-300"
+              className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-zinc-700 text-sm font-bold text-white ring-1 ring-white/10 transition hover:bg-zinc-600"
               aria-label="Profile"
             >
               {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" /> : avatarInitial}

@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { InvoicePaymentRow, RetailerInvoiceRow } from "@/types/invoice";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -108,8 +109,15 @@ export function PaymentsScreen({ initialPayments, initialInvoices, preselectedIn
   }
 
   async function savePayment() {
-    const amt = toNum(amount);
-    if (!invoiceId) return toastError("Select invoice.");
+    let invId = invoiceId;
+    if (!invId && skipRequiredFieldValidation() && invoices[0]) {
+      invId = invoices[0].id;
+    }
+    let amt = toNum(amount);
+    if (!invId) return toastError("Select invoice.");
+    if (amt <= 0 && skipRequiredFieldValidation()) {
+      amt = 0.01;
+    }
     if (amt <= 0) return toastError("Enter payment amount.");
 
     setSaving(true);
@@ -124,7 +132,7 @@ export function PaymentsScreen({ initialPayments, initialInvoices, preselectedIn
 
     const payload = {
       user_id: user.id,
-      invoice_id: invoiceId,
+      invoice_id: invId,
       payment_date: paymentDate || todayISODate(),
       method,
       amount: amt,
@@ -146,8 +154,8 @@ export function PaymentsScreen({ initialPayments, initialInvoices, preselectedIn
 
     // Keep invoice summary fields in sync for list cards.
     const [sumRes, invRes] = await Promise.all([
-      supabase.from("invoice_payments").select("amount").eq("invoice_id", invoiceId),
-      supabase.from("retailer_invoices").select("total_amount").eq("id", invoiceId).single(),
+      supabase.from("invoice_payments").select("amount").eq("invoice_id", invId),
+      supabase.from("retailer_invoices").select("total_amount").eq("id", invId).single(),
     ]);
     if (!sumRes.error && !invRes.error && invRes.data) {
       const paid = (sumRes.data ?? []).reduce((a, r) => a + Number(r.amount || 0), 0);
@@ -160,7 +168,7 @@ export function PaymentsScreen({ initialPayments, initialInvoices, preselectedIn
           outstanding_amount: outstanding,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", invoiceId);
+        .eq("id", invId);
     }
 
     setPayments((p) =>

@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { InvoiceGoodsReturnRow, RetailerInvoiceRow } from "@/types/invoice";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -86,8 +87,15 @@ export function ReturnsScreen({ initialReturns, initialInvoices, preselectedInvo
   }
 
   async function saveReturn() {
-    const amt = toNum(amount);
-    if (!invoiceId) return toastError("Select invoice.");
+    let invId = invoiceId;
+    if (!invId && skipRequiredFieldValidation() && invoices[0]) {
+      invId = invoices[0].id;
+    }
+    let amt = toNum(amount);
+    if (!invId) return toastError("Select invoice.");
+    if (amt <= 0 && skipRequiredFieldValidation()) {
+      amt = 0.01;
+    }
     if (amt <= 0) return toastError("Enter return amount.");
     setSaving(true);
 
@@ -102,7 +110,7 @@ export function ReturnsScreen({ initialReturns, initialInvoices, preselectedInvo
 
     const payload = {
       user_id: user.id,
-      invoice_id: invoiceId,
+      invoice_id: invId,
       return_date: returnDate || todayISODate(),
       amount: amt,
       note: note.trim() || null,

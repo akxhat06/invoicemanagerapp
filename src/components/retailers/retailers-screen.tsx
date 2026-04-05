@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import { SwipeCompanyRow } from "@/components/companies/swipe-company-row";
 import type { CompanyRow } from "@/types/company";
@@ -194,6 +195,7 @@ export function RetailersScreen({ initialRetailers, initialInvoices, initialComp
   }
 
   function validateRetailerForm(): boolean {
+    if (skipRequiredFieldValidation()) return true;
     if (!retailerName.trim()) {
       toastError("Enter retailer name.");
       return false;
@@ -216,6 +218,7 @@ export function RetailersScreen({ initialRetailers, initialInvoices, initialComp
   }
 
   function validateInvoiceForm(): boolean {
+    if (skipRequiredFieldValidation()) return true;
     if (!invoiceCompanyId) {
       toastError("Select company.");
       return false;
@@ -263,12 +266,18 @@ export function RetailersScreen({ initialRetailers, initialInvoices, initialComp
       toastError("You must be signed in.");
       return;
     }
+    const dev = skipRequiredFieldValidation();
     const digits = retailerContact.replace(/\D/g, "");
     const payload = {
-      name: retailerName.trim(),
-      address: retailerAddress.trim(),
-      contact_no: digits,
-      gst_no: retailerGst.trim().toUpperCase(),
+      name: retailerName.trim() || (dev ? "Untitled retailer" : ""),
+      address: retailerAddress.trim() || (dev ? "—" : ""),
+      contact_no: digits.length === 10 ? digits : dev ? "0000000000" : "",
+      gst_no:
+        retailerGst.trim().toUpperCase().length === 15
+          ? retailerGst.trim().toUpperCase()
+          : dev
+            ? "29AAAAA0000A1Z5"
+            : "",
     };
 
     const isEdit = editingRetailerId !== null;
@@ -300,7 +309,14 @@ export function RetailersScreen({ initialRetailers, initialInvoices, initialComp
   }
 
   async function submitInvoice() {
-    if (!validateInvoiceForm() || !selectedRetailerForInvoice) return;
+    if (!validateInvoiceForm()) return;
+    const dev = skipRequiredFieldValidation();
+    const r = selectedRetailerForInvoice ?? (dev ? retailers[0] : undefined);
+    const cid = invoiceCompanyId || (dev ? companies[0]?.id ?? "" : "");
+    if (!r || !cid) {
+      toastError(dev ? "Add at least one retailer and company first." : "Select company and retailer.");
+      return;
+    }
     setSaving(true);
     const supabase = createClient();
     const {
@@ -311,11 +327,14 @@ export function RetailersScreen({ initialRetailers, initialInvoices, initialComp
       toastError("You must be signed in.");
       return;
     }
-    const r = selectedRetailerForInvoice;
-    const basic = parseAmount(basicAmount);
-    const gst = parseAmount(gstAmount);
-    const invoice = parseAmount(invoiceAmount);
-    const transport = parseAmount(transportationAmount);
+    const basicRaw = parseAmount(basicAmount);
+    const gstRaw = parseAmount(gstAmount);
+    const invoiceRaw = parseAmount(invoiceAmount);
+    const transportRaw = parseAmount(transportationAmount);
+    const basic = dev && basicRaw <= 0 ? 0.01 : basicRaw;
+    const gst = dev && gstRaw < 0 ? 0 : gstRaw;
+    const invoice = dev && invoiceRaw <= 0 ? 0.01 : invoiceRaw;
+    const transport = dev && transportRaw < 0 ? 0 : transportRaw;
     const total = invoice + transport;
     const { data, error } = await supabase
       .from("retailer_invoices")
@@ -326,9 +345,9 @@ export function RetailersScreen({ initialRetailers, initialInvoices, initialComp
         retailer_address: r.address,
         contact_no: r.contact_no,
         gst_no: r.gst_no,
-        company_id: invoiceCompanyId,
-        invoice_number: invoiceNumber.trim(),
-        bill_date: billDate,
+        company_id: cid,
+        invoice_number: invoiceNumber.trim() || (dev ? "DEV-000" : ""),
+        bill_date: billDate || (dev ? todayISODate() : ""),
         basic_amount: basic,
         gst_amount: gst,
         invoice_amount: invoice,

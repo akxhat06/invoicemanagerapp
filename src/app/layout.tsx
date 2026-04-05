@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { ThemeProvider } from "@/components/theme-provider";
 import { Geist_Mono, Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 
@@ -36,12 +35,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${playfair.variable} ${geistMono.variable} h-full antialiased`}
+      className={`dark ${inter.variable} ${playfair.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="bg-background text-foreground flex min-h-full flex-col transition-colors">
-        <ThemeProvider>{children}</ThemeProvider>
-      </body>
+      <body className="bg-background text-foreground flex min-h-full flex-col">{children}</body>
     </html>
   );
 }

@@ -1,5 +1,5 @@
-import { DashboardPagePlaceholder } from "@/components/dashboard/dashboard-page-placeholder";
+import { SettingsScreen } from "@/components/settings/settings-screen";
 
 export default function SettingsPage() {
-  return <DashboardPagePlaceholder title="Settings" />;
+  return <SettingsScreen />;
 }

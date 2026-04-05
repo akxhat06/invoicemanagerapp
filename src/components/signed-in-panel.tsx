@@ -30,7 +30,7 @@ export function SignedInPanel({ email }: Props) {
 
   return (
     <>
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#b29743]/12 text-[#8f7a36]">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-500/12 text-zinc-400">
         <CheckIcon />
       </div>
       <h2 className="login-split-form-title font-login-serif mt-6 text-left text-2xl font-semibold tracking-tight sm:text-3xl">

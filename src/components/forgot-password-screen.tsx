@@ -1,8 +1,8 @@
 "use client";
 
 import { resolveIdentifierToEmail } from "@/lib/auth/resolve-login-email";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { createClient } from "@/lib/supabase/client";
+import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -33,7 +33,7 @@ function LogoMark() {
 }
 
 const inputSplit =
-  "w-full rounded-lg border border-zinc-300/95 bg-white py-3 pl-4 pr-4 text-[15px] text-zinc-900 shadow-[0_1px_2px_rgba(24,24,27,0.06)] outline-none transition placeholder:text-zinc-500 focus:border-[#b29743] focus:ring-2 focus:ring-[#b29743]/25";
+  "w-full rounded-lg border border-zinc-600/70 bg-zinc-900/90 py-3 pl-4 pr-4 text-[15px] text-zinc-100 shadow-inner outline-none transition placeholder:text-zinc-500 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/25";
 
 export function ForgotPasswordScreen({ variant = "standalone" }: Props) {
   const [email, setEmail] = useState("");
@@ -46,7 +46,7 @@ export function ForgotPasswordScreen({ variant = "standalone" }: Props) {
     setError(null);
     setMessage(null);
     const trimmed = email.trim();
-    if (!trimmed) {
+    if (!skipRequiredFieldValidation() && !trimmed) {
       setError("Please enter your email or username.");
       return;
     }
@@ -101,7 +101,7 @@ export function ForgotPasswordScreen({ variant = "standalone" }: Props) {
           autoComplete="username"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          required
+          required={!skipRequiredFieldValidation()}
           className={
             variant === "split"
               ? inputSplit
@@ -170,12 +170,7 @@ export function ForgotPasswordScreen({ variant = "standalone" }: Props) {
   }
 
   return (
-    <div className="bg-auth-canvas relative flex min-h-screen flex-col font-sans transition-colors">
-      <div className="absolute right-4 top-4 z-20">
-        <div className="border-border bg-card/90 rounded-xl border shadow-sm backdrop-blur">
-          <ThemeToggle />
-        </div>
-      </div>
+    <div className="bg-auth-canvas relative flex min-h-screen flex-col font-sans">
       <div className="bg-primary relative flex min-h-[38vh] shrink-0 flex-col items-center justify-center overflow-hidden px-6 pb-24 pt-10">
         <div
           className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-black/15"

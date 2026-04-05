@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -93,14 +94,16 @@ export function ProfileScreen({
     e.preventDefault();
     setError(null);
     setMessage(null);
-    if (!username.trim()) {
-      setError("Name is required.");
-      return;
-    }
-    const phoneDigits = phone.replace(/\D/g, "");
-    if (phone.trim().length > 0 && phoneDigits.length !== 10) {
-      setError("Phone number must be exactly 10 digits.");
-      return;
+    if (!skipRequiredFieldValidation()) {
+      if (!username.trim()) {
+        setError("Name is required.");
+        return;
+      }
+      const phoneDigitsCheck = phone.replace(/\D/g, "");
+      if (phone.trim().length > 0 && phoneDigitsCheck.length !== 10) {
+        setError("Phone number must be exactly 10 digits.");
+        return;
+      }
     }
     setSaving(true);
     const supabase = createClient();
@@ -113,8 +116,10 @@ export function ProfileScreen({
       return;
     }
 
+    const phoneDigits = phone.replace(/\D/g, "");
+    const resolvedUsername = skipRequiredFieldValidation() ? username.trim() || "Dev user" : username.trim();
     const payload = {
-      username: username.trim(),
+      username: resolvedUsername,
       phone: phoneDigits.length === 10 ? phoneDigits : null,
       address: address.trim() || null,
       updated_at: new Date().toISOString(),
@@ -131,7 +136,7 @@ export function ProfileScreen({
 
     await supabase.auth.updateUser({
       data: {
-        username: username.trim(),
+        username: resolvedUsername,
       },
     });
 

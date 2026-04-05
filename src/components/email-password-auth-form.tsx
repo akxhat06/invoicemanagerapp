@@ -2,6 +2,7 @@
 
 import { resolveIdentifierToEmail } from "@/lib/auth/resolve-login-email";
 import { createClient } from "@/lib/supabase/client";
+import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError } from "@/lib/toast";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -107,7 +108,7 @@ const inputLight =
   "border-border bg-card text-foreground ring-primary/10 focus:border-primary/50 focus:ring-primary/15 dark:border-zinc-600/60 dark:bg-auth-input dark:text-zinc-100 dark:focus:border-amber-500/40 dark:focus:ring-amber-500/20";
 
 const inputSplit =
-  "rounded-lg border border-zinc-300/95 bg-white text-zinc-900 shadow-[0_1px_2px_rgba(24,24,27,0.06)] ring-0 placeholder:text-zinc-500 focus:border-[#b29743] focus:ring-2 focus:ring-[#b29743]/25";
+  "rounded-lg border border-zinc-600/70 bg-zinc-900/90 text-zinc-100 shadow-inner ring-0 placeholder:text-zinc-500 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/25";
 
 /** Full navigation: starts loading `/` immediately with cookies (faster than App Router soft nav after auth). */
 function goToAppHome() {
@@ -132,6 +133,7 @@ export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
   const isSplit = variant === "split";
   /** Signup + split has more fields — tighter vertical rhythm so the column fits common desktop heights. */
   const compactSplitSignup = !isSignIn && isSplit;
+  const relax = skipRequiredFieldValidation();
   const inputPadY = compactSplitSignup ? "py-2.5" : "py-3";
   const inputBase = `w-full rounded-lg border ${inputPadY} pl-11 pr-4 text-[15px] outline-none transition placeholder:text-zinc-400 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60${isSplit ? "" : " dark:placeholder:text-zinc-500"}`;
   const inputWithToggle = `${inputBase} ${inputLight} pr-12`;
@@ -144,7 +146,7 @@ export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
       : "login-split-field-label mb-1.5 block text-sm font-medium"
     : "mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-200";
   const iconToggleCls = isSplit
-    ? "absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-zinc-100/90 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#b29743]/35 disabled:pointer-events-none disabled:opacity-40"
+    ? "absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-zinc-100/90 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/35 disabled:pointer-events-none disabled:opacity-40"
     : "absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600/30 disabled:pointer-events-none disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-200 dark:focus-visible:ring-amber-500/25";
 
   async function handleSubmit(e: React.FormEvent) {
@@ -159,12 +161,17 @@ export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
       const supabase = createClient();
 
       if (isSignIn) {
-        if (!email.trim()) {
-          setErrorMessage("Enter your email or username.");
-          return;
-        }
-        if (!password) {
-          setErrorMessage("Enter your password.");
+        if (!relax) {
+          if (!email.trim()) {
+            setErrorMessage("Enter your email or username.");
+            return;
+          }
+          if (!password) {
+            setErrorMessage("Enter your password.");
+            return;
+          }
+        } else if (!email.trim() || !password) {
+          setErrorMessage("Enter your email or username and password.");
           return;
         }
         const { email: resolvedEmail, error: resolveError } = await resolveIdentifierToEmail(supabase, email);
@@ -189,29 +196,39 @@ export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
         return;
       }
 
-      if (!username.trim()) {
-        toastError("Please enter a username.");
-        return;
+      if (!relax) {
+        if (!username.trim()) {
+          toastError("Please enter a username.");
+          return;
+        }
+        if (!email.trim()) {
+          toastError("Please enter your email.");
+          return;
+        }
+        if (password !== confirmPassword) {
+          toastError("Passwords do not match.");
+          return;
+        }
+        if (password.length < 6) {
+          toastError("Password must be at least 6 characters.");
+          return;
+        }
       }
-      if (!email.trim()) {
-        toastError("Please enter your email.");
-        return;
-      }
-      if (password !== confirmPassword) {
+
+      const signUpEmail = relax ? email.trim() || "dev@example.local" : email.trim();
+      const signUpUsername = relax ? username.trim() || "devuser" : username.trim();
+      const signUpPassword = relax && password.length < 6 ? "devdevdev" : password;
+      if (relax && password !== confirmPassword && confirmPassword.length > 0) {
         toastError("Passwords do not match.");
-        return;
-      }
-      if (password.length < 6) {
-        toastError("Password must be at least 6 characters.");
         return;
       }
 
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
+        email: signUpEmail,
+        password: signUpPassword,
         options: {
           data: {
-            username: username.trim(),
+            username: signUpUsername,
           },
         },
       });
@@ -273,7 +290,7 @@ export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
               autoComplete="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              required={!isSignIn}
+              required={!isSignIn && !relax}
               disabled={loading}
               className={`${inputBase} ${fieldBase}`}
               placeholder="Enter your username"
@@ -303,7 +320,7 @@ export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
             autoComplete={isSignIn ? "username" : "email"}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            required
+            required={!relax}
             disabled={loading}
             className={`${inputBase} ${fieldBase}`}
             placeholder={
@@ -341,8 +358,8 @@ export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
             autoComplete={isSignIn ? "current-password" : "new-password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
+            required={!relax}
+            minLength={relax ? undefined : 6}
             disabled={loading}
             className={fieldWithToggle}
             placeholder="Enter your password"
@@ -381,8 +398,8 @@ export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
               autoComplete="new-password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              required={!isSignIn}
-              minLength={6}
+              required={!isSignIn && !relax}
+              minLength={relax ? undefined : 6}
               disabled={loading}
               className={fieldWithToggle}
               placeholder="Enter your password again"
@@ -406,7 +423,7 @@ export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
             type="checkbox"
             checked={keepSignedIn}
             onChange={(e) => setKeepSignedIn(e.target.checked)}
-            className="rounded border-zinc-300 text-[#b29743] focus:ring-[#b29743]/35"
+            className="rounded border-zinc-300 text-zinc-500 accent-zinc-500 focus:ring-zinc-500/35"
           />
           Keep me signed in
         </label>
