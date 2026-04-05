@@ -77,6 +77,14 @@ function InvoiceDocIcon({ className }: { className?: string }) {
   );
 }
 
+function EditPencilIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+    </svg>
+  );
+}
+
 export function RetailersScreen({ initialRetailers, initialInvoices, initialCompanies }: Props) {
   const router = useRouter();
   const [retailers, setRetailers] = useState<RetailerRow[]>(initialRetailers);
@@ -90,6 +98,9 @@ export function RetailersScreen({ initialRetailers, initialInvoices, initialComp
   const [deletingRetailerId, setDeletingRetailerId] = useState<string | null>(null);
   const [deleteInvoicePending, setDeleteInvoicePending] = useState<RetailerInvoiceRow | null>(null);
   const [deletingInvoiceId, setDeletingInvoiceId] = useState<string | null>(null);
+
+  /** When set, retailer panel saves as update instead of insert */
+  const [editingRetailerId, setEditingRetailerId] = useState<string | null>(null);
 
   /** Retailer form */
   const [retailerName, setRetailerName] = useState("");
@@ -129,11 +140,24 @@ export function RetailersScreen({ initialRetailers, initialInvoices, initialComp
 
   function closePanel() {
     if (saving) return;
+    if (panel === "retailer") {
+      resetRetailerForm();
+    }
     setPanel("closed");
   }
 
   function openRetailerPanel() {
     resetRetailerForm();
+    setPanel("retailer");
+  }
+
+  function openRetailerPanelForEdit(r: RetailerRow) {
+    if (deletingRetailerId) return;
+    setEditingRetailerId(r.id);
+    setRetailerName(r.name ?? "");
+    setRetailerAddress(r.address ?? "");
+    setRetailerContact(r.contact_no?.replace(/\D/g, "").slice(0, 10) ?? "");
+    setRetailerGst(r.gst_no ?? "");
     setPanel("retailer");
   }
 
@@ -151,6 +175,7 @@ export function RetailersScreen({ initialRetailers, initialInvoices, initialComp
   }
 
   function resetRetailerForm() {
+    setEditingRetailerId(null);
     setRetailerName("");
     setRetailerAddress("");
     setRetailerContact("");
@@ -239,24 +264,36 @@ export function RetailersScreen({ initialRetailers, initialInvoices, initialComp
       return;
     }
     const digits = retailerContact.replace(/\D/g, "");
-    const { data, error } = await supabase
-      .from("retailers")
-      .insert({
-        user_id: user.id,
-        name: retailerName.trim(),
-        address: retailerAddress.trim(),
-        contact_no: digits,
-        gst_no: retailerGst.trim().toUpperCase(),
-      })
-      .select()
-      .single();
+    const payload = {
+      name: retailerName.trim(),
+      address: retailerAddress.trim(),
+      contact_no: digits,
+      gst_no: retailerGst.trim().toUpperCase(),
+    };
+
+    const isEdit = editingRetailerId !== null;
+    const { data, error } = isEdit
+      ? await supabase.from("retailers").update(payload).eq("id", editingRetailerId).select().single()
+      : await supabase
+          .from("retailers")
+          .insert({
+            user_id: user.id,
+            ...payload,
+          })
+          .select()
+          .single();
+
     setSaving(false);
     if (error) {
       toastError(error.message);
       return;
     }
-    setRetailers((prev) => [...prev, data as RetailerRow].sort((a, b) => a.name.localeCompare(b.name)));
-    toastSuccess("Retailer created.");
+    const row = data as RetailerRow;
+    setRetailers((prev) => {
+      const next = isEdit ? prev.map((x) => (x.id === row.id ? row : x)) : [...prev, row];
+      return next.sort((a, b) => a.name.localeCompare(b.name));
+    });
+    toastSuccess(isEdit ? "Retailer updated." : "Retailer created.");
     setPanel("closed");
     resetRetailerForm();
     router.refresh();
@@ -376,7 +413,13 @@ export function RetailersScreen({ initialRetailers, initialInvoices, initialComp
   }
 
   const panelTitle =
-    panel === "retailer" ? "New Retailer" : panel === "invoice" ? "Invoice Entry" : "";
+    panel === "retailer"
+      ? editingRetailerId
+        ? "Edit Retailer"
+        : "New Retailer"
+      : panel === "invoice"
+        ? "Invoice Entry"
+        : "";
 
   return (
     <div className="relative pb-28">
@@ -396,7 +439,7 @@ export function RetailersScreen({ initialRetailers, initialInvoices, initialComp
           </button>
         </div>
         <p className="text-muted-foreground mb-4 text-sm">
-          Add retailers first, then use <span className="font-medium">Invoice entry</span> to choose company, retailer, and invoice details.
+          Add retailers first, then use <span className="font-medium">Invoice entry</span> to choose company, retailer, and invoice details. Tap a retailer to edit.
         </p>
 
         <h3 className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-wider">Your retailers</h3>
@@ -415,15 +458,26 @@ export function RetailersScreen({ initialRetailers, initialInvoices, initialComp
                 onSwipeDelete={() => requestDeleteRetailer(r)}
                 disabled={deletingRetailerId === r.id || !!deletingRetailerId}
               >
-                <div
-                  className={`cursor-default p-4 ${deletingRetailerId === r.id ? "pointer-events-none opacity-60" : ""}`}
+                <button
+                  type="button"
+                  onClick={() => openRetailerPanelForEdit(r)}
+                  aria-label={`Edit retailer ${r.name}`}
+                  className={`flex w-full cursor-pointer items-start gap-3 p-4 text-left transition hover:bg-muted/40 ${deletingRetailerId === r.id ? "pointer-events-none opacity-60" : ""}`}
                 >
-                  <p className="font-semibold text-zinc-900 dark:text-white">{r.name}</p>
-                  <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-                    {r.contact_no?.trim() || "—"} · {r.gst_no?.trim() || "—"}
-                  </p>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{r.address?.trim() || "—"}</p>
-                </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-zinc-900 dark:text-white">{r.name}</p>
+                    <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+                      {r.contact_no?.trim() || "—"} · {r.gst_no?.trim() || "—"}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{r.address?.trim() || "—"}</p>
+                  </div>
+                  <span
+                    className="border-border text-muted-foreground inline-flex shrink-0 rounded-lg border bg-muted/30 p-2 dark:bg-muted/20"
+                    title="Edit"
+                  >
+                    <EditPencilIcon />
+                  </span>
+                </button>
               </SwipeCompanyRow>
             ))}
           </ul>
