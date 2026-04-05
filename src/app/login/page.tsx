@@ -1,26 +1,29 @@
-import { InvoiceAuthScreen } from "@/components/invoice-auth-screen";
+import { AuthLoginCardClient } from "@/components/auth/auth-login-card-client";
+import { AuthLoginShell } from "@/components/auth/auth-login-shell";
+import { LoginCardSkeleton } from "@/components/auth/login-card-skeleton";
+import { SignedInPanel } from "@/components/signed-in-panel";
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { Suspense } from "react";
-
-function AuthScreenFallback() {
-  return (
-    <div className="bg-auth-canvas min-h-screen">
-      <div className="bg-auth-hero min-h-[38vh] animate-pulse" />
-    </div>
-  );
-}
 
 export default async function LoginPage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (user) redirect("/");
+
+  if (user) {
+    return (
+      <AuthLoginShell flow="signin">
+        <SignedInPanel email={user.email ?? ""} />
+      </AuthLoginShell>
+    );
+  }
 
   return (
-    <Suspense fallback={<AuthScreenFallback />}>
-      <InvoiceAuthScreen mode="signin" />
-    </Suspense>
+    <AuthLoginShell flow="signin">
+      <Suspense fallback={<LoginCardSkeleton />}>
+        <AuthLoginCardClient mode="signin" />
+      </Suspense>
+    </AuthLoginShell>
   );
 }

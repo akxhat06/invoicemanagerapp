@@ -1,9 +1,10 @@
 "use client";
 
+import { FinancialYearSelect } from "@/components/dashboard/financial-year-select";
 import { firstName, formatDisplayName } from "@/lib/display-name";
 import type { BillingGrandTotals, BillingSummaryLine } from "@/lib/billing-summary";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 function formatInr(n: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -33,6 +34,9 @@ type Props = {
   companyBillingTable: BillingSummaryLine[];
   /** Every retailer profile + billing; legacy name-only rows appended */
   retailerBillingTable: BillingSummaryLine[];
+  financialYearStartYear: number;
+  financialYearLabel: string;
+  financialYearOptions: { startYear: number; label: string }[];
 };
 
 const thCls =
@@ -136,6 +140,9 @@ export function DashboardOverview({
   billingGrand,
   companyBillingTable,
   retailerBillingTable,
+  financialYearStartYear,
+  financialYearLabel,
+  financialYearOptions,
 }: Props) {
   const [exporting, setExporting] = useState(false);
   const [detail, setDetail] = useState<DetailPanel>(null);
@@ -151,12 +158,12 @@ export function DashboardOverview({
     hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
 
   const cards = [
-    { label: "Companies", value: companyCount, hint: "Businesses", tone: "bg-sky-500/10 text-sky-500", key: "companies" as const },
-    { label: "Retailers", value: retailerCount, hint: "Profiles", tone: "bg-amber-500/10 text-amber-500", key: "retailers" as const },
-    { label: "Transport", value: transportCount, hint: "Entries", tone: "bg-cyan-500/10 text-cyan-500", key: null },
-    { label: "Payments", value: paymentCount, hint: "Received", tone: "bg-emerald-500/10 text-emerald-500", key: null },
-    { label: "Returns", value: returnCount, hint: "Goods return", tone: "bg-rose-500/10 text-rose-500", key: null },
-    { label: "Commission", value: commissionCount, hint: "Entries", tone: "bg-violet-500/10 text-violet-500", key: null },
+    { label: "Companies", value: companyCount, hint: "All profiles", tone: "bg-sky-500/10 text-sky-500", key: "companies" as const },
+    { label: "Retailers", value: retailerCount, hint: "All profiles", tone: "bg-amber-500/10 text-amber-500", key: "retailers" as const },
+    { label: "Transport", value: transportCount, hint: "This FY", tone: "bg-cyan-500/10 text-cyan-500", key: null },
+    { label: "Payments", value: paymentCount, hint: "This FY", tone: "bg-emerald-500/10 text-emerald-500", key: null },
+    { label: "Returns", value: returnCount, hint: "This FY", tone: "bg-rose-500/10 text-rose-500", key: null },
+    { label: "Commission", value: commissionCount, hint: "This FY", tone: "bg-violet-500/10 text-violet-500", key: null },
   ];
 
   const closeDetail = useCallback(() => setDetail(null), []);
@@ -185,7 +192,7 @@ export function DashboardOverview({
     if (exporting) return;
     setExporting(true);
     try {
-      const res = await fetch("/api/overview-export", { method: "GET" });
+      const res = await fetch(`/api/overview-export?fy=${financialYearStartYear}`, { method: "GET" });
       if (!res.ok) {
         throw new Error("Failed to export");
       }
@@ -193,7 +200,8 @@ export function DashboardOverview({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `overview-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const fyFile = financialYearLabel.replace(/\s/g, "");
+      a.download = `overview-FY${fyFile}-${new Date().toISOString().slice(0, 10)}.xlsx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -205,11 +213,11 @@ export function DashboardOverview({
 
   const detailTitle =
     detail === "companies"
-      ? "Companies — billing detail"
+      ? `Companies — ${financialYearLabel}`
       : detail === "retailers"
-        ? "Retailers — billing detail"
+        ? `Retailers — ${financialYearLabel}`
         : detail === "overall"
-          ? "Overall summary"
+          ? `Overall — ${financialYearLabel}`
           : "";
 
   return (
@@ -228,14 +236,19 @@ export function DashboardOverview({
             aria-modal="true"
             aria-labelledby="billing-detail-title"
           >
-            <div className="border-border flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">
-              <h2 id="billing-detail-title" className="text-base font-bold text-zinc-900 dark:text-white">
-                {detailTitle}
-              </h2>
+            <div className="border-border flex shrink-0 flex-col gap-1 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <div className="min-w-0">
+                <h2 id="billing-detail-title" className="text-base font-bold text-zinc-900 dark:text-white">
+                  {detailTitle}
+                </h2>
+                <p className="text-muted-foreground mt-0.5 text-xs">
+                  Indian FY {financialYearLabel} · 1 Apr {financialYearStartYear} – 31 Mar {financialYearStartYear + 1}
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={closeDetail}
-                className="text-muted-foreground hover:text-foreground rounded-lg px-2 py-1 text-sm font-medium"
+                className="text-muted-foreground hover:text-foreground self-end rounded-lg px-2 py-1 text-sm font-medium sm:self-center"
               >
                 Close
               </button>
@@ -247,7 +260,7 @@ export function DashboardOverview({
                 <div className="space-y-6">
                   <div>
                     <h3 className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-wider">
-                      Invoice totals (non-draft)
+                      Invoice totals — {financialYearLabel} (non-draft)
                     </h3>
                     <div className="overflow-x-auto rounded-xl border border-border">
                       <table className="w-full min-w-[280px] text-sm">
@@ -275,7 +288,7 @@ export function DashboardOverview({
                   </div>
                   <div>
                     <h3 className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-wider">
-                      Record counts
+                      Profiles (all time)
                     </h3>
                     <div className="overflow-x-auto rounded-xl border border-border">
                       <table className="w-full min-w-[280px] text-sm">
@@ -283,6 +296,24 @@ export function DashboardOverview({
                           {[
                             ["Companies", companyCount],
                             ["Retailers", retailerCount],
+                          ].map(([k, v]) => (
+                            <tr key={k} className="border-border/60 border-t first:border-t-0">
+                              <td className="text-muted-foreground px-3 py-2.5">{k}</td>
+                              <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{v}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-wider">
+                      Module entries — {financialYearLabel}
+                    </h3>
+                    <div className="overflow-x-auto rounded-xl border border-border">
+                      <table className="w-full min-w-[280px] text-sm">
+                        <tbody>
+                          {[
                             ["Transport entries", transportCount],
                             ["Payment entries", paymentCount],
                             ["Goods return entries", returnCount],
@@ -323,7 +354,7 @@ export function DashboardOverview({
               {greeting}, {greet}!
             </p>
             <p className="mt-1.5 text-sm leading-relaxed text-white/75">
-              Here&apos;s your overview for today
+              Billing figures use Indian FY {financialYearLabel} (Apr–Mar).
             </p>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-start">
@@ -396,27 +427,35 @@ export function DashboardOverview({
       </section>
 
       <section className="mt-8" aria-labelledby="billing-summary-heading">
-        <div className="mb-3 flex items-center gap-2.5">
-          <div className="bg-primary h-5 w-1 shrink-0 rounded-full" />
-          <h2 id="billing-summary-heading" className="text-base font-bold tracking-tight text-zinc-900 dark:text-white">
-            Billing summary
-          </h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="bg-primary h-5 w-1 shrink-0 rounded-full" />
+            <h2 id="billing-summary-heading" className="text-base font-bold tracking-tight text-zinc-900 dark:text-white">
+              Billing summary
+            </h2>
+          </div>
+          <Suspense
+            fallback={<div className="bg-muted h-[72px] w-full max-w-[200px] animate-pulse rounded-lg sm:w-[200px]" />}
+          >
+            <FinancialYearSelect options={financialYearOptions} selectedStartYear={financialYearStartYear} />
+          </Suspense>
         </div>
         <p className="text-muted-foreground mb-4 text-sm">
-          Totals from saved invoices (drafts excluded), grouped by company and by retailer. Tap the{" "}
-          <span className="font-medium">Companies</span> or <span className="font-medium">Retailers</span> count above for a
-          full table, or <span className="font-medium">Overall</span> for combined totals.
+          Invoices are included by <span className="font-medium">invoice date</span> within FY {financialYearLabel} (1 Apr{" "}
+          {financialYearStartYear} – 31 Mar {financialYearStartYear + 1}). Drafts excluded. Transport / payments / returns /
+          commission counts match invoices in this FY. Tap <span className="font-medium">Companies</span> or{" "}
+          <span className="font-medium">Retailers</span> for the full table, or <span className="font-medium">Overall</span>.
         </p>
 
         {billingGrand.invoiceCount === 0 ? (
           <div className="border-border bg-card rounded-2xl border border-dashed px-4 py-8 text-center">
-            <p className="font-semibold text-zinc-900 dark:text-white">No billing yet</p>
+            <p className="font-semibold text-zinc-900 dark:text-white">No billing in {financialYearLabel}</p>
             <p className="text-muted-foreground mt-1 text-sm">
-              Add retailers and use{" "}
+              Change the financial year above or add invoices dated in this FY via{" "}
               <Link href="/retailers" className="font-medium text-amber-700 underline-offset-2 hover:underline dark:text-amber-400">
                 Invoice entry
-              </Link>{" "}
-              to create invoices.
+              </Link>
+              .
             </p>
           </div>
         ) : (
@@ -446,7 +485,9 @@ export function DashboardOverview({
                   {formatInr(billingGrand.totalOutstanding)}
                 </p>
               </div>
-              <p className="text-muted-foreground col-span-2 text-center text-[10px] font-medium">Tap for full overall summary</p>
+              <p className="text-muted-foreground col-span-2 text-center text-[10px] font-medium">
+                Tap for full overall summary · {financialYearLabel}
+              </p>
             </button>
 
             <div className="mb-6">

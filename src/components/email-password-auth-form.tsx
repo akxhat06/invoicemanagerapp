@@ -11,6 +11,8 @@ type Mode = "signin" | "signup";
 
 type Props = {
   mode: Mode;
+  /** Split-screen login: teal CTA, light form fields, optional “keep signed in”. */
+  variant?: "default" | "split";
 };
 
 function UserIcon({ className }: { className?: string }) {
@@ -27,6 +29,15 @@ function LockIcon({ className }: { className?: string }) {
     <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
       <path d="M7 11V7a5 5 0 0110 0v4" />
+    </svg>
+  );
+}
+
+function MailIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
     </svg>
   );
 }
@@ -92,15 +103,13 @@ function EyeOffIcon() {
   );
 }
 
-const inputBase =
-  "w-full rounded-lg border py-3 pl-11 pr-4 text-[15px] outline-none transition placeholder:text-zinc-400 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 dark:placeholder:text-zinc-500";
-
 const inputLight =
   "border-border bg-card text-foreground ring-primary/10 focus:border-primary/50 focus:ring-primary/15 dark:border-zinc-600/60 dark:bg-auth-input dark:text-zinc-100 dark:focus:border-amber-500/40 dark:focus:ring-amber-500/20";
 
-const inputWithToggle = `${inputBase} ${inputLight} pr-12`;
+const inputSplit =
+  "rounded-lg border border-zinc-300/95 bg-white text-zinc-900 shadow-[0_1px_2px_rgba(24,24,27,0.06)] ring-0 placeholder:text-zinc-500 focus:border-[#b29743] focus:ring-2 focus:ring-[#b29743]/25";
 
-export function EmailPasswordAuthForm({ mode }: Props) {
+export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const passwordResetNotice = searchParams.get("message") === "password-reset";
@@ -113,8 +122,26 @@ export function EmailPasswordAuthForm({ mode }: Props) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
 
   const isSignIn = mode === "signin";
+  const isSplit = variant === "split";
+  /** Signup + split has more fields — tighter vertical rhythm so the column fits common desktop heights. */
+  const compactSplitSignup = !isSignIn && isSplit;
+  const inputPadY = compactSplitSignup ? "py-2.5" : "py-3";
+  const inputBase = `w-full rounded-lg border ${inputPadY} pl-11 pr-4 text-[15px] outline-none transition placeholder:text-zinc-400 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60${isSplit ? "" : " dark:placeholder:text-zinc-500"}`;
+  const inputWithToggle = `${inputBase} ${inputLight} pr-12`;
+  const inputWithToggleSplit = `${inputBase} ${inputSplit} pr-12`;
+  const fieldBase = isSplit ? inputSplit : inputLight;
+  const fieldWithToggle = isSplit ? inputWithToggleSplit : inputWithToggle;
+  const labelCls = isSplit
+    ? compactSplitSignup
+      ? "login-split-field-label mb-1 block text-sm font-medium"
+      : "login-split-field-label mb-1.5 block text-sm font-medium"
+    : "mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-200";
+  const iconToggleCls = isSplit
+    ? "absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-zinc-100/90 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#b29743]/35 disabled:pointer-events-none disabled:opacity-40"
+    : "absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600/30 disabled:pointer-events-none disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-200 dark:focus-visible:ring-amber-500/25";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -151,7 +178,7 @@ export function EmailPasswordAuthForm({ mode }: Props) {
           setErrorMessage(signInError.message);
           return;
         }
-        router.push("/");
+        router.push("/login");
         router.refresh();
         return;
       }
@@ -190,7 +217,7 @@ export function EmailPasswordAuthForm({ mode }: Props) {
 
       if (data.session) {
         toastSuccess("Account created. Welcome!");
-        router.push("/");
+        router.push("/login");
         router.refresh();
         return;
       }
@@ -203,15 +230,33 @@ export function EmailPasswordAuthForm({ mode }: Props) {
     }
   }
 
+  const alertAlign = isSplit ? "text-left" : "text-center";
+
   return (
-    <form onSubmit={handleSubmit} className="mt-6 space-y-5" aria-busy={loading}>
+    <form
+      onSubmit={handleSubmit}
+      className={
+        compactSplitSignup
+          ? "mt-5 space-y-3 sm:mt-6 sm:space-y-3.5"
+          : isSplit
+            ? "mt-6 space-y-4 sm:mt-8 sm:space-y-5"
+            : "mt-6 space-y-5"
+      }
+      aria-busy={loading}
+    >
       {!isSignIn && (
         <div>
-          <label htmlFor="username" className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+          <label htmlFor="username" className={labelCls}>
             Username
           </label>
           <div className="relative">
-            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500">
+            <span
+              className={
+                isSplit
+                  ? "pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500"
+                  : "pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+              }
+            >
               <UserIcon />
             </span>
             <input
@@ -223,7 +268,7 @@ export function EmailPasswordAuthForm({ mode }: Props) {
               onChange={(e) => setUsername(e.target.value)}
               required={!isSignIn}
               disabled={loading}
-              className={`${inputBase} ${inputLight}`}
+              className={`${inputBase} ${fieldBase}`}
               placeholder="Enter your username"
             />
           </div>
@@ -231,12 +276,18 @@ export function EmailPasswordAuthForm({ mode }: Props) {
       )}
 
       <div>
-        <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+        <label htmlFor="email" className={labelCls}>
           {isSignIn ? "Email or username" : "Email"}
         </label>
         <div className="relative">
-          <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500">
-            <UserIcon />
+          <span
+            className={
+              isSplit
+                ? "pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500"
+                : "pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+            }
+          >
+            {isSignIn && isSplit ? <MailIcon /> : <UserIcon />}
           </span>
           <input
             id="email"
@@ -247,18 +298,33 @@ export function EmailPasswordAuthForm({ mode }: Props) {
             onChange={(e) => setEmail(e.target.value)}
             required
             disabled={loading}
-            className={`${inputBase} ${inputLight}`}
-            placeholder={isSignIn ? "Enter your email or username" : "Enter your email"}
+            className={`${inputBase} ${fieldBase}`}
+            placeholder={
+              isSignIn && isSplit ? "you@company.com or username" : isSignIn ? "Enter your email or username" : "Enter your email"
+            }
           />
         </div>
       </div>
 
       <div>
-        <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
-          Password
-        </label>
+        <div className={`flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 ${compactSplitSignup ? "mb-1" : "mb-1.5"}`}>
+          <label htmlFor="password" className={labelCls + " mb-0"}>
+            Password
+          </label>
+          {isSignIn && isSplit && (
+            <Link href="/forgot-password" className="login-split-gold-link text-sm shrink-0">
+              Forgot password?
+            </Link>
+          )}
+        </div>
         <div className="relative">
-          <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500">
+          <span
+            className={
+              isSplit
+                ? "pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500"
+                : "pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+            }
+          >
             <LockIcon />
           </span>
           <input
@@ -271,39 +337,34 @@ export function EmailPasswordAuthForm({ mode }: Props) {
             required
             minLength={6}
             disabled={loading}
-            className={inputWithToggle}
+            className={fieldWithToggle}
             placeholder="Enter your password"
           />
           <button
             type="button"
             onClick={() => setShowPassword((v) => !v)}
             disabled={loading}
-            className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600/30 disabled:pointer-events-none disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-200 dark:focus-visible:ring-amber-500/25"
+            className={iconToggleCls}
             aria-label={showPassword ? "Hide password" : "Show password"}
           >
             {showPassword ? <EyeOffIcon /> : <EyeIcon />}
           </button>
         </div>
-        {isSignIn && (
-          <div className="mt-2 text-right">
-            <Link
-              href="/forgot-password"
-              className={`text-auth-link text-sm font-semibold transition hover:opacity-90 ${loading ? "pointer-events-none opacity-50" : ""}`}
-              tabIndex={loading ? -1 : undefined}
-            >
-              Forgot password?
-            </Link>
-          </div>
-        )}
       </div>
 
       {!isSignIn && (
         <div>
-          <label htmlFor="confirmPassword" className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+          <label htmlFor="confirmPassword" className={labelCls}>
             Confirm password
           </label>
           <div className="relative">
-            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500">
+            <span
+              className={
+                isSplit
+                  ? "pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500"
+                  : "pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+              }
+            >
               <LockIcon />
             </span>
             <input
@@ -316,14 +377,14 @@ export function EmailPasswordAuthForm({ mode }: Props) {
               required={!isSignIn}
               minLength={6}
               disabled={loading}
-              className={inputWithToggle}
+              className={fieldWithToggle}
               placeholder="Enter your password again"
             />
             <button
               type="button"
               onClick={() => setShowConfirmPassword((v) => !v)}
               disabled={loading}
-              className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 focus:outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-200"
+              className={iconToggleCls}
               aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
             >
               {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
@@ -332,20 +393,50 @@ export function EmailPasswordAuthForm({ mode }: Props) {
         </div>
       )}
 
+      {isSignIn && isSplit && (
+        <label className="login-split-form-check flex cursor-pointer items-center gap-2.5 text-sm">
+          <input
+            type="checkbox"
+            checked={keepSignedIn}
+            onChange={(e) => setKeepSignedIn(e.target.checked)}
+            className="rounded border-zinc-300 text-[#b29743] focus:ring-[#b29743]/35"
+          />
+          Keep me signed in
+        </label>
+      )}
+
       {passwordResetNotice && isSignIn && (
-        <p className="rounded-xl border border-emerald-200/80 bg-emerald-50 px-3 py-2.5 text-center text-sm text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-300">
+        <p
+          className={
+            isSplit
+              ? `rounded-xl border border-emerald-200/80 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900 ${alertAlign}`
+              : `rounded-xl border border-emerald-200/80 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-300 ${alertAlign}`
+          }
+        >
           Your password was updated. Sign in with your new password.
         </p>
       )}
 
       {errorMessage && (
-        <p className="rounded-xl border border-red-200/80 bg-red-50 px-3 py-2.5 text-center text-sm text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+        <p
+          className={
+            isSplit
+              ? `rounded-xl border border-red-200/80 bg-red-50 px-3 py-2.5 text-sm text-red-900 ${alertAlign}`
+              : `rounded-xl border border-red-200/80 bg-red-50 px-3 py-2.5 text-sm text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300 ${alertAlign}`
+          }
+        >
           {errorMessage}
         </p>
       )}
 
       {message && (
-        <p className="rounded-xl border border-emerald-200/80 bg-emerald-50 px-3 py-2.5 text-center text-sm text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-300">
+        <p
+          className={
+            isSplit
+              ? `rounded-xl border border-emerald-200/80 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900 ${alertAlign}`
+              : `rounded-xl border border-emerald-200/80 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-300 ${alertAlign}`
+          }
+        >
           {message}
         </p>
       )}
@@ -353,7 +444,13 @@ export function EmailPasswordAuthForm({ mode }: Props) {
       <button
         type="submit"
         disabled={loading}
-        className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[var(--auth-cta-from)] to-[var(--auth-cta-to)] px-4 py-3.5 text-[15px] font-bold text-white shadow-[0_4px_28px_rgba(201,166,107,0.33)] transition hover:brightness-105 disabled:cursor-wait disabled:opacity-100"
+        className={
+          isSplit
+            ? compactSplitSignup
+              ? "auth-login-cta flex min-h-[44px] w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[15px] font-bold text-white transition-[filter,opacity] hover:brightness-105 disabled:cursor-wait disabled:opacity-100 sm:min-h-0 md:py-3"
+              : "auth-login-cta flex min-h-[48px] w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-[15px] font-bold text-white transition-[filter,opacity] hover:brightness-105 disabled:cursor-wait disabled:opacity-100 sm:min-h-0"
+            : "auth-login-cta flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-[15px] font-bold text-white transition-[filter,opacity] hover:brightness-105 disabled:cursor-wait disabled:opacity-100"
+        }
       >
         {loading && <ButtonSpinner />}
         {loading
