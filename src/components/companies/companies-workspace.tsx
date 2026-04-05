@@ -6,7 +6,7 @@ import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
 import { useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Props = {
   initialCompanies: CompanyRow[];
@@ -46,41 +46,12 @@ function fieldClassDark(multiline = false) {
 
 const labelDark = "mb-1.5 block text-sm font-medium text-zinc-100";
 
-function viewCompanyInitials(name: string): string {
-  const t = name.trim();
-  if (!t) return "?";
-  const parts = t.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
-  return t.slice(0, 2).toUpperCase();
-}
-
-function ViewSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-zinc-800/75 bg-zinc-950/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.03)]">
-      <div className="border-b border-zinc-800/55 bg-zinc-900/25 px-4 py-2.5">
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">{title}</h3>
-      </div>
-      <div className="divide-y divide-zinc-800/55 px-4">{children}</div>
-    </section>
-  );
-}
-
-function ViewField({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
+function ViewRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   const v = value?.trim();
   return (
-    <div className="py-3.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{label}</p>
-      <p
-        className={`mt-1.5 whitespace-pre-wrap text-[15px] leading-snug text-zinc-100 ${mono ? "font-mono text-[14px] tracking-tight" : ""}`}
-      >
+    <div className="border-b border-zinc-800/50 py-3.5 last:border-b-0">
+      <p className="text-xs text-zinc-500">{label}</p>
+      <p className={`mt-1 whitespace-pre-wrap text-[15px] leading-snug text-zinc-100 ${mono ? "font-mono text-sm tracking-tight" : ""}`}>
         {v || "—"}
       </p>
     </div>
@@ -708,81 +679,29 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-32">
               {panel === "view" && selected && (
-                <div className="space-y-5">
-                  <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/70 via-zinc-950/80 to-zinc-950 p-5">
-                    <div
-                      className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-zinc-500/5 blur-2xl"
-                      aria-hidden
-                    />
-                    <div className="relative flex gap-4">
-                      <div className="flex h-[3.25rem] w-[3.25rem] shrink-0 items-center justify-center rounded-xl bg-zinc-800/90 text-base font-bold tracking-tight text-zinc-200 ring-1 ring-zinc-600/50">
-                        {viewCompanyInitials(selected.name)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <h2 className="text-xl font-semibold leading-tight tracking-tight text-white">{selected.name}</h2>
-                            {selected.is_draft ? (
-                              <span className="mt-2 inline-flex rounded-md border border-zinc-600/45 bg-zinc-900/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
-                                Draft
-                              </span>
-                            ) : null}
-                          </div>
-                          <div className="flex shrink-0 gap-1">
-                            <button
-                              type="button"
-                              onClick={startEdit}
-                              className="rounded-xl border border-white/10 p-2.5 text-zinc-400 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
-                              aria-label="Edit company"
-                            >
-                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" strokeLinecap="round" strokeLinejoin="round" />
-                                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteTarget(selected)}
-                              className="rounded-xl border border-red-500/35 p-2.5 text-red-300/90 transition hover:border-red-500/55 hover:bg-red-950/35"
-                              aria-label="Delete company"
-                            >
-                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                                <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14zM10 11v6M14 11v6" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-                        <div className="mt-4 flex flex-wrap items-center gap-2">
-                          {selected.gst_no?.trim() ? (
-                            <code className="rounded-lg bg-black/45 px-2.5 py-1.5 font-mono text-xs tracking-wide text-zinc-200 ring-1 ring-zinc-700/60">
-                              {selected.gst_no.trim()}
-                            </code>
-                          ) : (
-                            <span className="text-sm text-zinc-500">GST not added</span>
-                          )}
-                          {selected.email?.trim() ? (
-                            <a
-                              href={`mailto:${selected.email.trim()}`}
-                              className="max-w-full truncate text-sm text-zinc-400 underline-offset-2 transition hover:text-zinc-200 hover:underline"
-                            >
-                              {selected.email.trim()}
-                            </a>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
+                <div>
+                  <div className="mb-4 flex justify-end gap-4 border-b border-zinc-800/50 pb-3">
+                    <button type="button" onClick={startEdit} className="text-sm font-medium text-zinc-400 transition hover:text-white">
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget(selected)}
+                      className="text-sm font-medium text-red-400/90 transition hover:text-red-300"
+                    >
+                      Delete
+                    </button>
                   </div>
-
-                  <ViewSection title="Contact">
-                    <ViewField label="Telephone" value={selected.telephone ?? ""} />
-                    <ViewField
+                  <div>
+                    <ViewRow label="Company name" value={selected.name ?? ""} />
+                    {selected.is_draft ? <ViewRow label="Status" value="Draft" /> : null}
+                    <ViewRow label="Telephone" value={selected.telephone ?? ""} />
+                    <ViewRow
                       label="Phone"
-                      value={
-                        phoneDigitsFromStored(selected.phone_no) ? `+91 ${phoneDigitsFromStored(selected.phone_no)}` : ""
-                      }
+                      value={phoneDigitsFromStored(selected.phone_no) ? `+91 ${phoneDigitsFromStored(selected.phone_no)}` : ""}
                       mono
                     />
-                    <ViewField
+                    <ViewRow
                       label="Alternative"
                       value={
                         phoneDigitsFromStored(selected.alternative_phone)
@@ -791,39 +710,18 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
                       }
                       mono
                     />
-                  </ViewSection>
-
-                  <ViewSection title="Address">
-                    <div className="py-3.5">
-                      <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-100">
-                        {selected.registered_address?.trim() || "—"}
-                      </p>
-                    </div>
-                  </ViewSection>
-
-                  <ViewSection title="Location">
-                    <div className="grid grid-cols-1 gap-5 py-4 sm:grid-cols-3 sm:gap-4">
-                      <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">City</p>
-                        <p className="mt-1.5 text-[15px] text-zinc-100">{selected.city?.trim() || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">State</p>
-                        <p className="mt-1.5 text-[15px] text-zinc-100">{selected.state?.trim() || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">PIN code</p>
-                        <p className="mt-1.5 font-mono text-[15px] tabular-nums text-zinc-100">{selected.pin_code?.trim() || "—"}</p>
-                      </div>
-                    </div>
-                  </ViewSection>
-
-                  <ViewSection title="Bank details">
-                    <ViewField label="Bank name" value={selected.bank_name ?? ""} />
-                    <ViewField label="Account number" value={selected.bank_account_number ?? ""} mono />
-                    <ViewField label="IFSC code" value={selected.bank_ifsc ?? ""} mono />
-                    <ViewField label="Branch" value={selected.bank_branch ?? ""} />
-                  </ViewSection>
+                    <ViewRow label="Address" value={selected.registered_address ?? ""} />
+                    <ViewRow label="GST no." value={selected.gst_no ?? ""} mono />
+                    <ViewRow label="Email address" value={selected.email ?? ""} />
+                    <ViewRow label="City" value={selected.city ?? ""} />
+                    <ViewRow label="State" value={selected.state ?? ""} />
+                    <ViewRow label="PIN code" value={selected.pin_code ?? ""} mono />
+                    <ViewRow label="Account holder" value={selected.bank_account_holder ?? ""} />
+                    <ViewRow label="Bank name" value={selected.bank_name ?? ""} />
+                    <ViewRow label="Account number" value={selected.bank_account_number ?? ""} mono />
+                    <ViewRow label="IFSC code" value={selected.bank_ifsc ?? ""} mono />
+                    <ViewRow label="Branch" value={selected.bank_branch ?? ""} />
+                  </div>
                 </div>
               )}
 
@@ -1260,7 +1158,7 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
                     <input className={fieldClassDark()} style={inputStyle} placeholder="Bank name" value={bankName} onChange={(e) => setBankName(e.target.value)} />
                     <input className={fieldClassDark()} style={inputStyle} placeholder="A/c no." value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} />
                     <input className={fieldClassDark()} style={inputStyle} placeholder="IFSC" maxLength={11} value={bankIfsc} onChange={(e) => setBankIfsc(e.target.value.toUpperCase())} />
-                    <input className={fieldClassDark()} style={inputStyle} placeholder="Branch" value={bankBranch} onChange={(e) => setBankBranch(e.target.value)} />
+                    <input className={fieldClassDark()} style={inputStyle} placeholder="Branch Address" value={bankBranch} onChange={(e) => setBankBranch(e.target.value)} />
                   </div>
                 </form>
               )}
