@@ -133,6 +133,36 @@ body {
   font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* ─── Authenticated app shell (sidebar + main canvas) ─── */
+.dashboard-app-sidebar {
+  background-color: #2b2d42;
+  color: #f4f4f5;
+}
+
+.dashboard-app-main {
+  background-color: #f3eaf4;
+  color: #18181b;
+  color-scheme: light;
+}
+
+.dark .dashboard-app-main {
+  background-color: #f7f7f9;
+  color: #18181b;
+  color-scheme: light;
+}
+
+.dashboard-app-sidebar .border-border {
+  border-color: rgb(255 255 255 / 0.14);
+}
+
+.dashboard-app-sidebar .bg-card {
+  background-color: rgb(255 255 255 / 0.08);
+}
+
+.dashboard-app-sidebar .text-foreground {
+  color: rgb(244 244 245);
+}
+
 /* ─── Login page: GPU-light hero (gradients, no stacked blur divs) ─── */
 .auth-login-root {
   contain: layout style;

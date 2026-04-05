@@ -2,9 +2,9 @@
 
 import { resolveIdentifierToEmail } from "@/lib/auth/resolve-login-email";
 import { createClient } from "@/lib/supabase/client";
-import { toastError, toastSuccess } from "@/lib/toast";
+import { toastError } from "@/lib/toast";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 type Mode = "signin" | "signup";
@@ -109,8 +109,12 @@ const inputLight =
 const inputSplit =
   "rounded-lg border border-zinc-300/95 bg-white text-zinc-900 shadow-[0_1px_2px_rgba(24,24,27,0.06)] ring-0 placeholder:text-zinc-500 focus:border-[#b29743] focus:ring-2 focus:ring-[#b29743]/25";
 
+/** Full navigation: starts loading `/` immediately with cookies (faster than App Router soft nav after auth). */
+function goToAppHome() {
+  window.location.assign("/");
+}
+
 export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const passwordResetNotice = searchParams.get("message") === "password-reset";
   const [username, setUsername] = useState("");
@@ -149,6 +153,8 @@ export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
     setErrorMessage(null);
     setLoading(true);
 
+    let exitForFullNavigation = false;
+
     try {
       const supabase = createClient();
 
@@ -178,8 +184,8 @@ export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
           setErrorMessage(signInError.message);
           return;
         }
-        router.push("/login");
-        router.refresh();
+        exitForFullNavigation = true;
+        goToAppHome();
         return;
       }
 
@@ -216,9 +222,8 @@ export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
       }
 
       if (data.session) {
-        toastSuccess("Account created. Welcome!");
-        router.push("/login");
-        router.refresh();
+        exitForFullNavigation = true;
+        goToAppHome();
         return;
       }
 
@@ -226,7 +231,9 @@ export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
         "Account created. If email confirmation is enabled, check your inbox before signing in."
       );
     } finally {
-      setLoading(false);
+      if (!exitForFullNavigation) {
+        setLoading(false);
+      }
     }
   }
 

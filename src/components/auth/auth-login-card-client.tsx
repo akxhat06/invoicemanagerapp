@@ -2,7 +2,8 @@
 
 import { EmailPasswordAuthForm } from "@/components/email-password-auth-form";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 
 type Mode = "signin" | "signup";
 
@@ -11,10 +12,15 @@ type Props = {
 };
 
 export function AuthLoginCardClient({ mode }: Props) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const authError = searchParams.get("error") === "auth";
 
   const isSignIn = mode === "signin";
+
+  useEffect(() => {
+    router.prefetch("/");
+  }, [router]);
 
   return (
     <>

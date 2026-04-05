@@ -25,10 +25,10 @@ const STEPS = [
     placement: "center" as const,
   },
   {
-    title: "Menu",
-    body: "Tap here to open the drawer. From there you can go to Overview, Companies, and Invoices.",
-    target: "[data-tour='menu-button']",
-    placement: "below-target" as const,
+    title: "Navigation",
+    body: "Use the bar at the bottom to switch between Dashboard, Companies, Retailers, Invoices, and Settings. On larger screens, the same links appear in the left sidebar.",
+    target: "[data-tour='bottom-nav']",
+    placement: "above-target" as const,
   },
   {
     title: "Your workspace",
@@ -38,11 +38,16 @@ const STEPS = [
   },
   {
     title: "You're set",
-    body: "That's it. Open the menu anytime to switch pages, or stay on the dashboard.",
+    body: "That's it. Use the sidebar or bottom bar to switch pages whenever you need.",
     target: null,
     placement: "center" as const,
   },
-] as const;
+] satisfies ReadonlyArray<{
+  title: string;
+  body: string;
+  target: string | null;
+  placement: "center" | "below-target" | "above-target" | "bottom";
+}>;
 
 type HoleMetrics = {
   top: number;
@@ -218,8 +223,9 @@ export function WelcomeTour({ onDismissed }: Props) {
 
     const pad = 12;
     const cardMaxW = Math.min(vw - 32, 448);
+    const placement = stepConfig.placement as "center" | "below-target" | "above-target" | "bottom";
 
-    if (stepConfig.placement === "below-target") {
+    if (placement === "below-target") {
       let top = hole.top + hole.height + pad;
       const left = Math.max(16, Math.min(hole.left, vw - cardMaxW - 16));
       const estHeight = 280;
@@ -236,7 +242,24 @@ export function WelcomeTour({ onDismissed }: Props) {
       };
     }
 
-    if (stepConfig.placement === "bottom") {
+    if (placement === "above-target") {
+      const estHeight = 280;
+      let top = hole.top - estHeight - pad;
+      if (top < 16) {
+        top = Math.max(16, hole.top + hole.height + pad);
+      }
+      const left = Math.max(16, Math.min(hole.left + hole.width / 2 - cardMaxW / 2, vw - cardMaxW - 16));
+      return {
+        zIndex: TOUR_Z_CARD,
+        position: "fixed",
+        top,
+        left,
+        width: cardMaxW,
+        maxWidth: "calc(100vw - 2rem)",
+      };
+    }
+
+    if (placement === "bottom") {
       return {
         zIndex: TOUR_Z_CARD,
         position: "fixed",
@@ -256,7 +279,7 @@ export function WelcomeTour({ onDismissed }: Props) {
       transform: "translate(-50%, -50%)",
       width: cardMaxW,
     };
-  }, [useSpotlight, hole, stepConfig.placement, vw, vh]);
+  }, [useSpotlight, hole, stepConfig, vw, vh]);
 
   const frameStyle: CSSProperties | null =
     useSpotlight && hole
