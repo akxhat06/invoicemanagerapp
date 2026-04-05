@@ -1,6 +1,10 @@
 import { DashboardOverview } from "@/components/dashboard/dashboard-overview";
 import { AuthenticatedDashboardShell } from "@/components/dashboard/authenticated-dashboard-shell";
-import { aggregateBillingSummaries } from "@/lib/billing-summary";
+import {
+  aggregateBillingSummaries,
+  mergeCompanyBillingRows,
+  mergeRetailerBillingRows,
+} from "@/lib/billing-summary";
 import { getAuthUser } from "@/lib/supabase/auth-user";
 import { ensureUserProfile } from "@/lib/supabase/ensure-profile";
 import { createClient } from "@/lib/supabase/server";
@@ -51,6 +55,7 @@ export default async function HomePage() {
     commissionCount,
     invRes,
     compRes,
+    retRes,
   ] = await Promise.all([
     countForUser(supabase, "companies", user.id),
     countForUser(supabase, "retailers", user.id),
@@ -61,14 +66,19 @@ export default async function HomePage() {
     supabase
       .from("retailer_invoices")
       .select(
-        "company_id, retailer_id, retailer_name, total_amount, payment_received, outstanding_amount, is_draft"
+        "company_id, retailer_id, retailer_name, total_amount, payment_received, outstanding_amount, basic_amount, gst_amount, invoice_amount, transportation_amount, is_draft"
       )
       .eq("user_id", user.id),
     supabase.from("companies").select("id, name").eq("user_id", user.id),
+    supabase.from("retailers").select("id, name").eq("user_id", user.id),
   ]);
 
-  const companyIdToName = new Map((compRes.data ?? []).map((c) => [c.id as string, c.name as string]));
+  const companiesList = (compRes.data ?? []) as { id: string; name: string }[];
+  const retailersList = (retRes.error ? [] : (retRes.data ?? [])) as { id: string; name: string }[];
+  const companyIdToName = new Map(companiesList.map((c) => [c.id, c.name]));
   const billing = aggregateBillingSummaries(invRes.data ?? [], companyIdToName);
+  const companyBillingTable = mergeCompanyBillingRows(companiesList, billing.byCompany);
+  const retailerBillingTable = mergeRetailerBillingRows(retailersList, billing.byRetailer);
 
   return (
     <AuthenticatedDashboardShell showWelcomeTour={showWelcomeTour}>
@@ -84,6 +94,8 @@ export default async function HomePage() {
         billingByCompany={billing.byCompany}
         billingByRetailer={billing.byRetailer}
         billingGrand={billing.grand}
+        companyBillingTable={companyBillingTable}
+        retailerBillingTable={retailerBillingTable}
       />
     </AuthenticatedDashboardShell>
   );
