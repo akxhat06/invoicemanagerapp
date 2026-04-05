@@ -8,8 +8,6 @@ import { DashboardMobileNav } from "./dashboard-mobile-nav";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { WelcomeTour } from "./welcome-tour";
 
-const BRAND = "#a40e4c";
-
 type Props = {
   username: string | undefined;
   email: string;
@@ -61,7 +59,7 @@ export function DashboardLayout({
   }, [displayName, email]);
 
   return (
-    <div className="min-h-screen bg-background font-sans text-foreground transition-colors md:flex md:min-h-[100dvh]">
+    <div className="flex min-h-[100dvh] flex-1 flex-col bg-background font-sans text-foreground transition-colors md:flex-row">
       {tourVisible && <WelcomeTour onDismissed={() => setTourVisible(false)} />}
       <DashboardSidebar
         displayName={displayName}
@@ -86,9 +84,14 @@ export function DashboardLayout({
               <span className="text-sm font-medium">Back</span>
             </button>
           ) : (
-            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold text-white shadow-sm" style={{ backgroundColor: BRAND }}>
-              VS
-            </div>
+            <img
+              src="/logo3-light.svg"
+              alt="Vishwa Shree Enterprises"
+              width={200}
+              height={200}
+              decoding="async"
+              className="relative z-10 h-10 w-auto max-w-[7.5rem] shrink-0 object-contain object-left"
+            />
           )}
           <h1 className="absolute left-1/2 top-1/2 max-w-[50%] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[17px] font-bold tracking-tight text-zinc-900">
             {title}
@@ -106,7 +109,7 @@ export function DashboardLayout({
 
         <main
           data-tour="main-content"
-          className="dashboard-app-main flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10 md:pt-8 lg:px-10"
+          className="dashboard-app-main flex min-h-0 flex-1 flex-col px-4 pb-24 pt-5 md:px-8 md:pb-10 md:pt-8 lg:px-10"
         >
           <div className="mx-auto w-full max-w-6xl">{children}</div>
         </main>

@@ -107,19 +107,15 @@ export function DashboardSidebar({
       className="dashboard-app-sidebar hidden w-[260px] shrink-0 flex-col border-r border-white/[0.06] md:flex"
       aria-label="Main navigation"
     >
-      <div className="flex shrink-0 items-start gap-3 px-5 pb-6 pt-7">
-        <div
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white shadow-md"
-          style={{ backgroundColor: ACCENT }}
-        >
-          VS
-        </div>
-        <div className="min-w-0 pt-0.5">
-          <p className="truncate text-[15px] font-semibold leading-tight text-white">Vishwa Shree</p>
-          <p className="mt-0.5 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT }}>
-            Enterprises
-          </p>
-        </div>
+      <div className="flex shrink-0 justify-center px-5 pb-6 pt-6">
+        <img
+          src="/logo3-dark.svg"
+          alt="Vishwa Shree Enterprises"
+          width={400}
+          height={400}
+          decoding="async"
+          className="h-auto w-full max-w-[200px] object-contain"
+        />
       </div>
 
       <nav className="flex min-h-0 flex-1 flex-col px-3">
