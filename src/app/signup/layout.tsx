@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Sign up",
-  description: "Create your Invoice Manager account",
+  description: "Create your Vishwa Shree Enterprises account",
 };
 
 export default function SignupLayout({ children }: { children: React.ReactNode }) {

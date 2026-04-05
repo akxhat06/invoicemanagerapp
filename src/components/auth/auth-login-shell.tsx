@@ -100,7 +100,7 @@ export function AuthLoginShell({ children, flow = "signin", formVerticalAlign = 
         </ul>
 
         <p className="login-split-brand-footer relative z-[1] mt-6 text-[11px] leading-relaxed sm:mt-8 sm:text-xs md:mt-auto md:pt-4 md:text-xs lg:pt-5 lg:text-sm">
-          © {new Date().getFullYear()} Invoice Manager · Secure workspace v1
+          © {new Date().getFullYear()} Vishwa Shree Enterprises · Secure workspace v1
         </p>
       </aside>
 

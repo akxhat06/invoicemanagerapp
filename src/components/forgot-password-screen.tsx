@@ -178,7 +178,7 @@ export function ForgotPasswordScreen({ variant = "standalone" }: Props) {
         />
         <div className="relative z-10 flex flex-col items-center text-center">
           <LogoMark />
-          <h1 className="mt-5 text-2xl font-bold tracking-tight text-white">Invoice Manager</h1>
+          <h1 className="mt-5 text-2xl font-bold tracking-tight text-white">Vishwa Shree Enterprises</h1>
         </div>
       </div>
 

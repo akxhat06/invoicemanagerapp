@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Forgot password",
-  description: "Reset your Invoice Manager password",
+  description: "Reset your Vishwa Shree Enterprises password",
 };
 
 export default function ForgotPasswordPage() {

@@ -69,33 +69,39 @@ export function DashboardLayout({
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.08] bg-[#0c0c0f]/95 px-4 py-3 shadow-sm backdrop-blur-md md:hidden">
-          {isProfilePage ? (
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="relative z-10 inline-flex h-10 items-center gap-1 rounded-xl px-2.5 text-zinc-200 transition hover:bg-white/[0.06]"
-              aria-label="Go back"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              <span className="text-sm font-medium">Back</span>
-            </button>
-          ) : (
+        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-white/[0.08] bg-[#0c0c0f]/95 px-4 py-3 shadow-sm backdrop-blur-md md:hidden">
+          <div className="flex w-[4.5rem] shrink-0 justify-start">
+            {isProfilePage ? (
+              <button
+                type="button"
+                onClick={() => router.back()}
+                className="inline-flex h-10 items-center gap-1 rounded-xl px-1 text-zinc-200 transition hover:bg-white/[0.06]"
+                aria-label="Go back"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+                <span className="text-sm font-medium">Back</span>
+              </button>
+            ) : null}
+          </div>
+
+          <div className="flex min-w-0 flex-1 items-center justify-center gap-2.5">
             <img
               src="/logo3-dark.svg"
-              alt="Vishwa Shree Enterprises"
-              width={200}
-              height={200}
+              alt=""
+              width={32}
+              height={32}
               decoding="async"
-              className="relative z-10 h-10 w-auto max-w-[7.5rem] shrink-0 object-contain object-left"
+              className="h-8 w-8 shrink-0 object-contain"
+              aria-hidden
             />
-          )}
-          <h1 className="absolute left-1/2 top-1/2 max-w-[50%] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[17px] font-bold tracking-tight text-white">
-            {title}
-          </h1>
-          <div className="relative z-10 flex items-center gap-2">
+            <h1 className="min-w-0 truncate text-center text-[17px] font-bold tracking-tight text-white">
+              {title}
+            </h1>
+          </div>
+
+          <div className="flex w-[4.5rem] shrink-0 justify-end">
             <DashboardProfileMenu
               displayName={displayName}
               avatarInitial={avatarInitial}

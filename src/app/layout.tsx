@@ -23,8 +23,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Invoice Manager", template: "%s | Invoice Manager" },
+  title: { default: "Vishwa Shree Enterprises", template: "%s | Vishwa Shree Enterprises" },
   description: "Manage your business, effortlessly",
+  icons: {
+    icon: [{ url: "/logo3-dark.svg", type: "image/svg+xml" }],
+    apple: "/logo3-dark.svg",
+  },
 };
 
 export default function RootLayout({

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 /** Charcoal accent — neutral gray, not pure black */
 const BRAND = "#71717a";
 const DARK = "#121214";
-/** App mark (public/icon2.svg) */
+/** App mark — `public/logo3-dark.svg` */
 const LOGO2_SRC = "/logo3-dark.svg";
 
 type Props = {
