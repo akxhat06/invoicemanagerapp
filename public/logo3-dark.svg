@@ -1,0 +1,14 @@
+<svg width="400" height="400" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+<circle cx="120" cy="85" r="50" fill="none" stroke="#0891b2" stroke-width="2"/>
+<clipPath id="cc4"><circle cx="120" cy="85" r="48"/></clipPath>
+<g clip-path="url(#cc4)">
+<path d="M 60 110 Q 90 95, 120 110 Q 150 125, 180 105" fill="none" stroke="#10b981" stroke-width="3" opacity="0.6"/>
+<path d="M 60 120 Q 95 107, 125 120 Q 155 133, 180 115" fill="none" stroke="#0891b2" stroke-width="2.5" opacity="0.4"/>
+</g>
+<path d="M 82 52 A 50 50 0 0 1 158 52" fill="none" stroke="#f97316" stroke-width="3" stroke-linecap="round"/>
+<text x="120" y="90" font-family="Georgia, serif" font-size="34" font-weight="700" text-anchor="middle" fill="#ffffff" letter-spacing="-2">VS</text>
+<text x="120" y="160" font-family="Georgia, serif" font-size="24" font-weight="700" text-anchor="middle" fill="#f0ece2" letter-spacing="0.5">Vishwa Shree</text>
+<line x1="60" y1="172" x2="180" y2="172" stroke="#f97316" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+<text x="120" y="190" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle" fill="#f97316" letter-spacing="5" opacity="0.8">ENTERPRISES</text>
+<path d="M 40 215 Q 90 200, 140 215 Q 190 230, 230 210" fill="none" stroke="#0891b2" stroke-width="1.5" opacity="0.15"/>
+</svg>

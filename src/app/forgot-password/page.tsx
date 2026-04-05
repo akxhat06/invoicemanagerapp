@@ -1,15 +1,16 @@
+import { AuthLoginShell } from "@/components/auth/auth-login-shell";
 import { ForgotPasswordScreen } from "@/components/forgot-password-screen";
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 
-export default async function ForgotPasswordPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (user) {
-    redirect("/");
-  }
+export const metadata: Metadata = {
+  title: "Forgot password",
+  description: "Reset your Vishwa Shree Enterprises password",
+};
 
-  return <ForgotPasswordScreen />;
+export default function ForgotPasswordPage() {
+  return (
+    <AuthLoginShell>
+      <ForgotPasswordScreen variant="split" />
+    </AuthLoginShell>
+  );
 }

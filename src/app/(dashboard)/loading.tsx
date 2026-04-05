@@ -1,14 +1,12 @@
 export default function DashboardLoading() {
   return (
-    <div className="bg-background/95 fixed inset-0 z-[200] flex items-center justify-center backdrop-blur-[1px]">
-      <div className="flex flex-col items-center gap-3">
-        <img
-          src="/pulsering.svg"
-          alt="Loading"
-          className="h-16 w-16"
-          aria-hidden="true"
-        />
-        <p className="text-muted-foreground text-sm font-medium">Loading...</p>
+    <div className="min-h-[50vh] animate-pulse space-y-4">
+      <div className="h-8 max-w-xs rounded-lg bg-zinc-800/80" />
+      <div className="h-36 max-w-2xl rounded-2xl bg-zinc-800/60 ring-1 ring-white/[0.06]" />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-24 rounded-xl bg-zinc-800/60 ring-1 ring-white/[0.06]" />
+        ))}
       </div>
     </div>
   );

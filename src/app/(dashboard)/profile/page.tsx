@@ -16,16 +16,15 @@ export default async function ProfilePage() {
     .eq("id", user.id)
     .maybeSingle();
 
-  const usernameFromMeta = (user.user_metadata as { username?: string } | undefined)?.username ?? "";
-  const avatarFromMeta = (user.user_metadata as { avatar_url?: string } | undefined)?.avatar_url ?? "";
+  const meta = (user.user_metadata ?? {}) as { username?: string; avatar_url?: string };
 
   return (
     <ProfileScreen
-      initialUsername={profile?.username ?? usernameFromMeta}
-      initialPhone={profile?.phone ?? user.phone ?? ""}
+      initialUsername={profile?.username ?? meta.username ?? ""}
+      initialPhone={profile?.phone ?? ""}
       initialAddress={profile?.address ?? ""}
       email={user.email ?? ""}
-      initialAvatarUrl={profile?.avatar_url ?? avatarFromMeta}
+      initialAvatarUrl={profile?.avatar_url ?? meta.avatar_url ?? ""}
     />
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { InvoiceCommissionRow, RetailerInvoiceRow } from "@/types/invoice";
 import { useEffect, useMemo, useState } from "react";
@@ -85,12 +86,19 @@ export function CommissionsScreen({
   }
 
   async function saveCommission() {
-    if (!invoiceId) return toastError("Select invoice.");
+    let invId = invoiceId;
+    if (!invId && skipRequiredFieldValidation() && invoices[0]) {
+      invId = invoices[0].id;
+    }
+    if (!invId) return toastError("Select invoice.");
 
-    const gst = toNum(gstAmount);
-    const tsp = toNum(tspAmount);
-    const percent = toNum(commissionPercent);
-    const inv = invoices.find((i) => i.id === invoiceId);
+    let gst = toNum(gstAmount);
+    let tsp = toNum(tspAmount);
+    let percent = toNum(commissionPercent);
+    if (skipRequiredFieldValidation() && percent <= 0) {
+      percent = 1;
+    }
+    const inv = invoices.find((i) => i.id === invId);
     if (!inv) return toastError("Invoice not found.");
 
     const total = Number(inv.total_amount || 0);
@@ -110,7 +118,7 @@ export function CommissionsScreen({
 
     const payload = {
       user_id: user.id,
-      invoice_id: invoiceId,
+      invoice_id: invId,
       total_amount: total,
       total_payment: paid,
       gst_amount: gst,

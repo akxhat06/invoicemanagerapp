@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Class-based dark mode for next-themes (Tailwind v4 defaults to prefers-color-scheme only). */
+/* Dark mode variant: `dark` class is always on <html>. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ─── App-wide semantic tokens (light) ─── */
@@ -40,51 +40,60 @@
   --auth-card-shadow: rgba(15, 40, 71, 0.25);
   --auth-input: #1a2235;
   --auth-link: #c9a66b;
-  --auth-cta-from: #c9a66b;
-  --auth-cta-to: #b8956a;
+  /* Auth primary CTA — logo cyan / teal (logo3.svg #0891b2) */
+  --auth-cta-from: #0891b2;
+  --auth-cta-to: #0d9488;
+  --auth-cta-glow: rgba(8, 145, 178, 0.38);
   --auth-logo-start: #e8c87a;
   --auth-logo-mid: #c9a66b;
   --auth-logo-end: #9a7342;
+  --auth-login-hero-text: #ffffff;
+  --auth-login-hero-muted: rgba(255, 255, 255, 0.8);
+  --auth-login-ring: rgba(201, 166, 107, 0.35);
 }
 
-/* ─── Dark: one consistent shell (aligned across dashboard + auth) ─── */
+/* ─── Dark: default app shell (forced via `dark` on <html>) — near-black ─── */
 .dark {
-  --background: #1a1c24;
-  --foreground: #f4f4f5;
-  --card: #22252b;
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #141417;
   --card-foreground: #fafafa;
-  --border: rgba(63, 63, 70, 0.85);
-  --muted: #27272a;
+  --border: rgba(63, 63, 70, 0.65);
+  --muted: #18181b;
   --muted-foreground: #a1a1aa;
-  --accent: #e0c068;
-  --accent-foreground: #1e1e2d;
-  --accent-secondary: #d9a35d;
-  --accent-secondary-foreground: #1a1410;
-  --surface-brand: #1e1e2d;
-  --primary: #1a3a5f;
-  --primary-hover: #0f2847;
-  --primary-foreground: #ffffff;
-  --header: rgba(26, 28, 36, 0.95);
-  --header-border: rgba(63, 63, 70, 0.6);
-  --panel: #12141a;
-  --panel-field: #1c1f28;
+  --accent: #52525b;
+  --accent-foreground: #fafafa;
+  --accent-secondary: #3f3f46;
+  --accent-secondary-foreground: #fafafa;
+  --surface-brand: #121214;
+  --primary: #3f3f46;
+  --primary-hover: #52525b;
+  --primary-foreground: #fafafa;
+  --header: rgba(9, 9, 11, 0.92);
+  --header-border: rgba(63, 63, 70, 0.45);
+  --panel: #0c0c0f;
+  --panel-field: #16161a;
   --panel-foreground: #f4f4f5;
   --panel-muted: #a3a3a8;
-  --auth-canvas: #1a1c24;
-  --auth-hero: #070b14;
-  --auth-hero-deep: #050810;
-  --auth-hero-glow: rgba(30, 58, 95, 0.35);
-  --auth-hero-glow-mid: rgba(15, 40, 71, 0.45);
-  --auth-card: rgba(18, 26, 46, 0.95);
+  --auth-canvas: #09090b;
+  --auth-hero: #0e0e11;
+  --auth-hero-deep: #060607;
+  --auth-hero-glow: rgba(120, 120, 128, 0.12);
+  --auth-hero-glow-mid: rgba(90, 90, 98, 0.18);
+  --auth-card: rgba(19, 19, 22, 0.97);
   --auth-card-border: rgba(255, 255, 255, 0.08);
   --auth-card-shadow: rgba(0, 0, 0, 0.55);
-  --auth-input: #1a2235;
-  --auth-link: #c9a66b;
-  --auth-cta-from: #c9a66b;
-  --auth-cta-to: #b8956a;
+  --auth-input: #1a1a1e;
+  --auth-link: #c4c4cc;
+  --auth-cta-from: #52525b;
+  --auth-cta-to: #3f3f46;
+  --auth-cta-glow: rgba(0, 0, 0, 0.45);
   --auth-logo-start: #e8c87a;
   --auth-logo-mid: #c9a66b;
   --auth-logo-end: #9a7342;
+  --auth-login-hero-text: #ffffff;
+  --auth-login-hero-muted: rgba(255, 255, 255, 0.8);
+  --auth-login-ring: rgba(201, 166, 107, 0.42);
 }
 
 @theme inline {
@@ -124,6 +133,391 @@ body {
   font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* ─── Authenticated app shell (sidebar + main canvas) ─── */
+.dashboard-app-sidebar {
+  background-color: #0e0e11;
+  color: #f4f4f5;
+}
+
+.dashboard-app-main {
+  background-color: #f3eaf4;
+  color: #18181b;
+  color-scheme: light;
+}
+
+.dark .dashboard-app-main {
+  background-color: #09090b;
+  color: #fafafa;
+  color-scheme: dark;
+}
+
+.dashboard-app-sidebar .border-border {
+  border-color: rgb(255 255 255 / 0.14);
+}
+
+.dashboard-app-sidebar .bg-card {
+  background-color: rgb(255 255 255 / 0.08);
+}
+
+.dashboard-app-sidebar .text-foreground {
+  color: rgb(244 244 245);
+}
+
+/* ─── Login page: GPU-light hero (gradients, no stacked blur divs) ─── */
+.auth-login-root {
+  contain: layout style;
+}
+
+.auth-login-hero {
+  background:
+    linear-gradient(168deg, var(--auth-hero-deep) 0%, var(--auth-hero) 42%, #141416 100%);
+  isolation: isolate;
+}
+
+.auth-login-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(ellipse 95% 70% at 50% -10%, var(--auth-hero-glow-mid), transparent 72%);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.auth-login-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(ellipse 60% 45% at 100% 100%, rgba(255, 255, 255, 0.06), transparent 65%);
+  pointer-events: none;
+}
+
+.auth-login-logo-ring {
+  background: linear-gradient(145deg, var(--auth-logo-start), var(--auth-logo-mid) 45%, var(--auth-logo-end));
+  box-shadow:
+    0 0 0 1px var(--auth-login-ring),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.auth-login-brand-title {
+  color: var(--auth-login-hero-text);
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35);
+}
+
+.auth-login-brand-sub {
+  color: var(--auth-login-hero-muted);
+}
+
+.auth-login-alert-error {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(254, 242, 242, 0.95);
+  color: rgb(127, 29, 29);
+}
+
+.dark .auth-login-alert-error {
+  border-color: rgba(248, 113, 113, 0.25);
+  background: rgba(69, 10, 10, 0.45);
+  color: rgb(254, 202, 202);
+}
+
+.auth-login-cta {
+  background: linear-gradient(180deg, var(--auth-cta-from), var(--auth-cta-to));
+  box-shadow: 0 6px 22px var(--auth-cta-glow);
+}
+
+/* Split form primary actions — neutral graphite */
+.login-split-main .auth-login-cta {
+  background: linear-gradient(180deg, #4a4a50, #35353a);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+}
+
+.dark .login-split-main .auth-login-cta {
+  background: linear-gradient(180deg, #4b4b52, #36363c);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
+}
+
+/* ─── Split login (dark grid + gold accents + cream form) ─── */
+.login-split-root {
+  contain: layout style;
+}
+
+.font-login-serif {
+  font-family: var(--font-playfair), ui-serif, Georgia, "Times New Roman", serif;
+}
+
+.login-split-gold {
+  color: #d4d4d8;
+}
+
+.login-split-gold-link {
+  color: #c4c4cc;
+  font-weight: 600;
+  text-underline-offset: 3px;
+  transition: opacity 0.15s ease;
+}
+
+.login-split-gold-link:hover {
+  opacity: 0.88;
+  text-decoration: underline;
+}
+
+/* Split login: brand column + dark form column */
+.login-split-brand {
+  background: linear-gradient(165deg, #151518 0%, #101012 50%, #0c0c0e 100%);
+  isolation: isolate;
+}
+
+.dark .login-split-brand {
+  background: linear-gradient(165deg, #18181b 0%, #121214 50%, #0e0e10 100%);
+}
+
+.login-split-brand::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: -1px -1px;
+  mask-image: radial-gradient(ellipse 85% 70% at 50% 40%, black 20%, transparent 100%);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.dark .login-split-brand::before {
+  opacity: 0.45;
+}
+
+.login-split-brand::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(ellipse 80% 60% at 10% 0%, rgba(255, 255, 255, 0.14), transparent 55%);
+  pointer-events: none;
+}
+
+.dark .login-split-brand::after {
+  background: radial-gradient(ellipse 80% 60% at 10% 0%, rgba(255, 255, 255, 0.08), transparent 55%);
+}
+
+.login-split-accent-text {
+  color: #e4e4e7;
+  text-shadow: 0 0 36px rgba(255, 255, 255, 0.08);
+}
+
+.dark .login-split-accent-text {
+  color: #f4f4f5;
+  text-shadow: 0 0 28px rgba(255, 255, 255, 0.06);
+}
+
+.login-split-brand-heading,
+.login-split-brand-feature-heading {
+  color: #fafafa;
+}
+
+.dark .login-split-brand-heading,
+.dark .login-split-brand-feature-heading {
+  color: #f4f4f5;
+}
+
+.login-split-brand-lead {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.dark .login-split-brand-lead {
+  color: rgba(244, 244, 245, 0.7);
+}
+
+.login-split-brand-mark {
+  background: linear-gradient(145deg, #52525b 0%, #3f3f46 45%, #2e2e33 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.login-split-feature-icon {
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.dark .login-split-feature-icon {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.login-split-feature-glow-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  background: #a1a1aa;
+  box-shadow:
+    0 0 12px rgba(255, 255, 255, 0.25),
+    0 0 24px rgba(255, 255, 255, 0.08);
+}
+
+.login-split-feature-desc {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.dark .login-split-feature-desc {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.login-split-brand-footer {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.dark .login-split-brand-footer {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.login-split-main {
+  background: #f3eaf4;
+  color: #18181b;
+  /* Dark app theme sets color-scheme: dark on the root; without this, native inputs use light text on odd fills. */
+  color-scheme: light;
+}
+
+.dark .login-split-main {
+  background: #09090b;
+  color: #fafafa;
+  color-scheme: dark;
+}
+
+/* Split form column: dark inputs (global app is always dark). */
+.login-split-main input[type="text"],
+.login-split-main input[type="email"],
+.login-split-main input[type="password"] {
+  background-color: #16161a;
+  color: #fafafa;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.login-split-main input::placeholder {
+  color: rgb(161 161 170);
+}
+
+.login-split-main input[type="checkbox"] {
+  accent-color: #71717a;
+}
+
+.dark .login-split-main input[type="checkbox"] {
+  accent-color: #a1a1aa;
+}
+
+.login-split-form-title {
+  color: #fafafa;
+}
+
+.login-split-form-subtitle,
+.login-split-form-footer {
+  color: rgba(250, 250, 250, 0.65);
+}
+
+.login-split-form-emphasis {
+  color: #fafafa;
+}
+
+.login-split-main .login-split-field-label {
+  color: #e4e4e7;
+}
+
+.login-split-main .login-split-form-check {
+  color: #a1a1aa;
+}
+
+.login-split-main .login-split-gold-link {
+  color: #d4d4d8;
+}
+
+.login-split-main .login-split-gold-link:hover {
+  color: #f4f4f5;
+}
+
+.login-split-main-legal {
+  color: rgba(250, 250, 250, 0.45);
+}
+
+.login-split-main .auth-login-alert-error {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(69, 10, 10, 0.55);
+  color: #fecaca;
+}
+
+.login-split-form-inner {
+  color: inherit;
+}
+
+/* Auth route enter: login ↔ signup (directional), other paths fade */
+@keyframes auth-view-enter-fade {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes auth-view-enter-right {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes auth-view-enter-left {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.auth-view-enter {
+  animation: auth-view-enter-fade 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.auth-view-enter[data-auth-view="/signup"] {
+  animation-name: auth-view-enter-right;
+  animation-duration: 0.4s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: both;
+}
+
+.auth-view-enter[data-auth-view="/login"] {
+  animation-name: auth-view-enter-left;
+  animation-duration: 0.4s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-view-enter {
+    animation: auth-view-enter-fade 0.01ms both !important;
+  }
+
+  .auth-view-enter[data-auth-view="/signup"],
+  .auth-view-enter[data-auth-view="/login"] {
+    animation: auth-view-enter-fade 0.01ms both !important;
+  }
+}
+
 @keyframes company-add-reveal {
   from {
     opacity: 0;
@@ -153,4 +547,50 @@ body {
 
 .group:hover .company-cta-shimmer-overlay {
   animation: company-cta-shimmer 2s ease-in-out infinite;
+}
+
+/* Add-company stepper: arrow travels 1→2 and 2→3 */
+@keyframes companies-stepper-arrow-slide {
+  0% {
+    left: 6px;
+    opacity: 0.35;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    left: calc(100% - 15px);
+    opacity: 1;
+  }
+}
+
+@keyframes companies-stepper-line-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.companies-stepper-arrow {
+  position: absolute;
+  top: 50%;
+  margin-top: -7px;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+
+.companies-stepper-arrow--slide {
+  animation: companies-stepper-arrow-slide 0.72s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.companies-stepper-arrow--rest {
+  left: calc(100% - 15px);
+}
+
+.animate-companies-stepper-line-fill {
+  animation: companies-stepper-line-fill 0.72s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transform-origin: left center;
 }
