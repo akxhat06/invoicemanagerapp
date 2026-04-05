@@ -1,5 +1,6 @@
 import { DashboardOverview } from "@/components/dashboard/dashboard-overview";
 import { AuthenticatedDashboardShell } from "@/components/dashboard/authenticated-dashboard-shell";
+import { aggregateBillingSummaries } from "@/lib/billing-summary";
 import { getAuthUser } from "@/lib/supabase/auth-user";
 import { ensureUserProfile } from "@/lib/supabase/ensure-profile";
 import { createClient } from "@/lib/supabase/server";
@@ -41,14 +42,33 @@ export default async function HomePage() {
     .maybeSingle();
   const showWelcomeTour = profile != null && profile.welcome_tour_completed_at == null;
 
-  const [companyCount, retailerCount, transportCount, paymentCount, returnCount, commissionCount] = await Promise.all([
+  const [
+    companyCount,
+    retailerCount,
+    transportCount,
+    paymentCount,
+    returnCount,
+    commissionCount,
+    invRes,
+    compRes,
+  ] = await Promise.all([
     countForUser(supabase, "companies", user.id),
     countForUser(supabase, "retailers", user.id),
     countForUser(supabase, "invoice_transports", user.id),
     countForUser(supabase, "invoice_payments", user.id),
     countForUser(supabase, "invoice_goods_returns", user.id),
     countForUser(supabase, "invoice_commissions", user.id),
+    supabase
+      .from("retailer_invoices")
+      .select(
+        "company_id, retailer_id, retailer_name, total_amount, payment_received, outstanding_amount, is_draft"
+      )
+      .eq("user_id", user.id),
+    supabase.from("companies").select("id, name").eq("user_id", user.id),
   ]);
+
+  const companyIdToName = new Map((compRes.data ?? []).map((c) => [c.id as string, c.name as string]));
+  const billing = aggregateBillingSummaries(invRes.data ?? [], companyIdToName);
 
   return (
     <AuthenticatedDashboardShell showWelcomeTour={showWelcomeTour}>
@@ -61,6 +81,9 @@ export default async function HomePage() {
         paymentCount={paymentCount}
         returnCount={returnCount}
         commissionCount={commissionCount}
+        billingByCompany={billing.byCompany}
+        billingByRetailer={billing.byRetailer}
+        billingGrand={billing.grand}
       />
     </AuthenticatedDashboardShell>
   );
