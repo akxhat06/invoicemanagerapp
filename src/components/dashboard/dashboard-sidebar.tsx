@@ -1,14 +1,12 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
+import { DashboardProfileMenu } from "@/components/dashboard/dashboard-profile-menu";
 import {
   DASHBOARD_NAV_ITEMS,
   isDashboardNavActive,
   type DashboardNavKey,
 } from "@/components/dashboard/dashboard-nav-config";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 
 type Props = {
   displayName: string;
@@ -56,29 +54,11 @@ function IconInvoices({ className }: { className?: string }) {
   );
 }
 
-function IconSettings({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-    </svg>
-  );
-}
-
-function LogOutIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M18 9l3 3m0 0l-3 3m3-3H9" />
-    </svg>
-  );
-}
-
 const ICONS: Record<DashboardNavKey, typeof IconDashboard> = {
   dashboard: IconDashboard,
   companies: IconCompanies,
   retailers: IconRetailers,
   invoices: IconInvoices,
-  settings: IconSettings,
 };
 
 const ACCENT = "#a1a1aa";
@@ -90,17 +70,6 @@ export function DashboardSidebar({
   pathname,
   invoiceBadgeCount,
 }: Props) {
-  const router = useRouter();
-  const [loggingOut, setLoggingOut] = useState(false);
-
-  async function handleLogout() {
-    setLoggingOut(true);
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  }
-
   return (
     <aside
       className="dashboard-app-sidebar hidden w-[260px] shrink-0 flex-col border-r border-white/[0.06] md:flex"
@@ -161,32 +130,14 @@ export function DashboardSidebar({
         </ul>
       </nav>
 
-      <div className="mt-auto shrink-0 space-y-3 border-t border-white/[0.08] px-4 py-4">
-        <Link
-          href="/profile"
-          className="flex items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-white/[0.06]"
-        >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/10 text-sm font-bold text-white ring-1 ring-white/10">
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              avatarInitial
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[14px] font-semibold text-white">{displayName}</p>
-            <p className="truncate text-xs text-white/45">Admin</p>
-          </div>
-        </Link>
-        <button
-          type="button"
-          onClick={handleLogout}
-          disabled={loggingOut}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-rose-400/25 bg-rose-500/10 px-3 py-2.5 text-[13px] font-semibold text-rose-200 transition hover:bg-rose-500/20 disabled:opacity-60"
-        >
-          <LogOutIcon className="shrink-0" />
-          {loggingOut ? "Signing out…" : "Log out"}
-        </button>
+      <div className="mt-auto shrink-0 border-t border-white/[0.08] px-4 py-4">
+        <DashboardProfileMenu
+          displayName={displayName}
+          avatarInitial={avatarInitial}
+          avatarUrl={avatarUrl}
+          menuPlacement="above"
+          variant="card"
+        />
       </div>
     </aside>
   );

@@ -8,6 +8,8 @@ export type RetailerInvoiceRow = {
   contact_no: string | null;
   invoice_number: string;
   bill_date: string;
+  /** Number of units (default 1 for older rows). */
+  quantity?: number;
   basic_amount: number;
   gst_no: string | null;
   gst_amount: number;

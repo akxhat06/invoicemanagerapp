@@ -5,6 +5,19 @@ import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+const MIN_PASSWORD_LEN = 8;
+
+function formatProfileSaveError(message: string): string {
+  const lower = message.toLowerCase();
+  if (
+    message.includes("profiles_username_lower_unique") ||
+    (lower.includes("unique") && lower.includes("username"))
+  ) {
+    return "That username is already taken. Choose another.";
+  }
+  return message;
+}
+
 type Props = {
   initialUsername: string;
   initialPhone: string;
@@ -29,6 +42,12 @@ export function ProfileScreen({
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   async function handleAvatarChange(file: File | null) {
     if (!file) return;
     setError(null);
@@ -96,7 +115,7 @@ export function ProfileScreen({
     setMessage(null);
     if (!skipRequiredFieldValidation()) {
       if (!username.trim()) {
-        setError("Name is required.");
+        setError("Username is required.");
         return;
       }
       const phoneDigitsCheck = phone.replace(/\D/g, "");
@@ -130,7 +149,7 @@ export function ProfileScreen({
       .eq("id", user.id);
     if (profileError) {
       setSaving(false);
-      setError(profileError.message);
+      setError(formatProfileSaveError(profileError.message));
       return;
     }
 
@@ -145,6 +164,36 @@ export function ProfileScreen({
     router.refresh();
   }
 
+  async function handlePasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordMessage(null);
+
+    if (newPassword.length < MIN_PASSWORD_LEN) {
+      setPasswordError(`Password must be at least ${MIN_PASSWORD_LEN} characters.`);
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords do not match.");
+      return;
+    }
+
+    setPasswordSaving(true);
+    const supabase = createClient();
+    const { error: pwError } = await supabase.auth.updateUser({ password: newPassword });
+    setPasswordSaving(false);
+
+    if (pwError) {
+      setPasswordError(pwError.message);
+      return;
+    }
+
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordMessage("Password updated.");
+    router.refresh();
+  }
+
   return (
     <section className="space-y-5">
       <div>
@@ -153,7 +202,7 @@ export function ProfileScreen({
           <h2 className="text-base font-bold tracking-tight text-zinc-900 dark:text-white">Profile</h2>
         </div>
         <p className="text-muted-foreground text-sm">
-          Update your details and profile picture.
+          Upload a profile image, set your username, add your address, and change your password.
         </p>
       </div>
 
@@ -168,13 +217,13 @@ export function ProfileScreen({
               )}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Profile photo</p>
+              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Profile image</p>
               <p className="text-muted-foreground mt-0.5 text-xs">JPG, PNG, WEBP, GIF, SVG · up to 3MB</p>
             </div>
           </div>
           <div className="mt-3">
             <label className="inline-flex cursor-pointer items-center rounded-lg border border-border px-3 py-2 text-sm font-medium transition hover:bg-muted/70">
-              {uploading ? "Uploading..." : "Upload image"}
+              {uploading ? "Uploading..." : "Upload profile image"}
               <input
                 type="file"
                 accept="image/*"
@@ -188,7 +237,7 @@ export function ProfileScreen({
 
         <div>
           <label htmlFor="p-name" className="mb-1.5 block text-sm font-medium">
-            Name
+            Username
           </label>
           <input
             id="p-name"
@@ -197,8 +246,12 @@ export function ProfileScreen({
             onChange={(e) => setUsername(e.target.value)}
             disabled={saving}
             className="bg-panel-field w-full rounded-lg border border-border px-3.5 py-3 text-[15px] outline-none transition focus:border-amber-600/60 focus:ring-1 focus:ring-amber-500/30 disabled:opacity-60"
-            placeholder="Your name"
+            placeholder="Unique name for display and sign-in"
+            autoComplete="username"
           />
+          <p className="text-muted-foreground mt-1 text-xs">
+            Used on the dashboard and to sign in instead of email (must be unique).
+          </p>
         </div>
 
         <div>
@@ -240,9 +293,9 @@ export function ProfileScreen({
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             disabled={saving}
-            rows={3}
-            className="bg-panel-field w-full resize-none rounded-lg border border-border px-3.5 py-3 text-[15px] outline-none transition focus:border-amber-600/60 focus:ring-1 focus:ring-amber-500/30 disabled:opacity-60"
-            placeholder="Enter address"
+            rows={4}
+            className="bg-panel-field w-full resize-y rounded-lg border border-border px-3.5 py-3 text-[15px] outline-none transition focus:border-amber-600/60 focus:ring-1 focus:ring-amber-500/30 disabled:opacity-60"
+            placeholder="Street, city, state, PIN — anything you want on file"
           />
         </div>
 
@@ -266,6 +319,74 @@ export function ProfileScreen({
         </button>
       </form>
 
+      <form
+        onSubmit={(e) => void handlePasswordSubmit(e)}
+        className="border-border bg-card space-y-4 rounded-2xl border p-5 shadow-sm"
+      >
+        <div>
+          <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Update password</h3>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Choose a new password. You stay signed in after it changes.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="p-new-password" className="mb-1.5 block text-sm font-medium">
+            New password
+          </label>
+          <input
+            id="p-new-password"
+            type="password"
+            value={newPassword}
+            onChange={(e) => {
+              setNewPassword(e.target.value);
+              setPasswordError(null);
+            }}
+            disabled={passwordSaving}
+            autoComplete="new-password"
+            className="bg-panel-field w-full rounded-lg border border-border px-3.5 py-3 text-[15px] outline-none transition focus:border-amber-600/60 focus:ring-1 focus:ring-amber-500/30 disabled:opacity-60"
+            placeholder={`At least ${MIN_PASSWORD_LEN} characters`}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="p-confirm-password" className="mb-1.5 block text-sm font-medium">
+            Confirm new password
+          </label>
+          <input
+            id="p-confirm-password"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value);
+              setPasswordError(null);
+            }}
+            disabled={passwordSaving}
+            autoComplete="new-password"
+            className="bg-panel-field w-full rounded-lg border border-border px-3.5 py-3 text-[15px] outline-none transition focus:border-amber-600/60 focus:ring-1 focus:ring-amber-500/30 disabled:opacity-60"
+            placeholder="Re-enter new password"
+          />
+        </div>
+
+        {passwordError && (
+          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+            {passwordError}
+          </p>
+        )}
+        {passwordMessage && (
+          <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
+            {passwordMessage}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={passwordSaving || !newPassword || !confirmPassword}
+          className="bg-accent-secondary text-accent-secondary-foreground rounded-lg px-5 py-2.5 text-sm font-semibold transition hover:brightness-105 disabled:opacity-60"
+        >
+          {passwordSaving ? "Updating…" : "Update password"}
+        </button>
+      </form>
     </section>
   );
 }

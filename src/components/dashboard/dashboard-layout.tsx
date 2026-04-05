@@ -1,10 +1,10 @@
 "use client";
 
 import { formatDisplayName } from "@/lib/display-name";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { DashboardMobileNav } from "./dashboard-mobile-nav";
+import { DashboardProfileMenu } from "./dashboard-profile-menu";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { WelcomeTour } from "./welcome-tour";
 
@@ -22,7 +22,6 @@ function getHeaderTitle(pathname: string): string {
   if (pathname.startsWith("/companies")) return "Companies";
   if (pathname.startsWith("/retailers")) return "Retailers";
   if (pathname.startsWith("/invoices")) return "Invoices";
-  if (pathname.startsWith("/settings")) return "Settings";
   if (pathname.startsWith("/profile")) return "Profile";
   return "Dashboard";
 }
@@ -97,13 +96,13 @@ export function DashboardLayout({
             {title}
           </h1>
           <div className="relative z-10 flex items-center gap-2">
-            <Link
-              href="/profile"
-              className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-zinc-700 text-sm font-bold text-white ring-1 ring-white/10 transition hover:bg-zinc-600"
-              aria-label="Profile"
-            >
-              {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" /> : avatarInitial}
-            </Link>
+            <DashboardProfileMenu
+              displayName={displayName}
+              avatarInitial={avatarInitial}
+              avatarUrl={avatarUrl}
+              menuPlacement="below"
+              variant="icon"
+            />
           </div>
         </header>
 

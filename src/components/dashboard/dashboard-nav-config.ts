@@ -1,4 +1,4 @@
-export type DashboardNavKey = "dashboard" | "companies" | "retailers" | "invoices" | "settings";
+export type DashboardNavKey = "dashboard" | "companies" | "retailers" | "invoices";
 
 export type DashboardNavItem = {
   key: DashboardNavKey;
@@ -13,7 +13,6 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { key: "companies", label: "Companies", href: "/companies" },
   { key: "retailers", label: "Retailers", href: "/retailers" },
   { key: "invoices", label: "Invoices", href: "/invoices", showBadge: true },
-  { key: "settings", label: "Settings", href: "/settings" },
 ];
 
 export function isDashboardNavActive(pathname: string, key: DashboardNavKey): boolean {
@@ -23,6 +22,5 @@ export function isDashboardNavActive(pathname: string, key: DashboardNavKey): bo
   if (key === "companies") return pathname.startsWith("/companies");
   if (key === "retailers") return pathname.startsWith("/retailers");
   if (key === "invoices") return pathname.startsWith("/invoices");
-  if (key === "settings") return pathname.startsWith("/settings");
   return false;
 }
