@@ -1,5 +1,6 @@
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { getAuthUser } from "@/lib/supabase/auth-user";
+import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 /**
@@ -18,8 +19,17 @@ export async function AuthenticatedDashboardShell({
     redirect("/login");
   }
 
-  const username = (user.user_metadata as { username?: string } | undefined)?.username;
-  const avatarUrl = (user.user_metadata as { avatar_url?: string } | undefined)?.avatar_url;
+  const meta = (user.user_metadata ?? {}) as { username?: string; avatar_url?: string };
+  const username = meta.username;
+
+  const supabase = await createClient();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("avatar_url")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const avatarUrl = profile?.avatar_url ?? meta.avatar_url ?? undefined;
 
   return (
     <DashboardLayout

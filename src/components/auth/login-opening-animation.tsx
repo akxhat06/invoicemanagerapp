@@ -408,7 +408,7 @@ export function LoginOpeningAnimation({ onComplete, className = "" }: Props) {
           style={{ background: DARK }}
         >
           <div
-            className="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-[20px] bg-white p-1.5 shadow-lg"
+            className="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-[20px] bg-zinc-900/90 p-1.5 shadow-lg ring-1 ring-white/10"
             style={{
               animation:
                 "login-open-rupeeIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, login-open-borderGlow 2s ease 0.6s infinite",

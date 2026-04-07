@@ -69,13 +69,13 @@ export function DashboardLayout({
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-white/[0.08] bg-[#0c0c0f]/95 px-4 py-3 shadow-sm backdrop-blur-md md:hidden">
-          <div className="flex w-[4.5rem] shrink-0 justify-start">
+        <header className="sticky top-0 z-30 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-white/[0.08] bg-[#0c0c0f]/95 px-4 py-3 shadow-sm backdrop-blur-md md:hidden">
+          <div className="flex min-w-0 items-center justify-self-start">
             {isProfilePage ? (
               <button
                 type="button"
                 onClick={() => router.back()}
-                className="inline-flex h-10 items-center gap-1 rounded-xl px-1 text-zinc-200 transition hover:bg-white/[0.06]"
+                className="inline-flex h-11 items-center gap-1 rounded-xl px-1 text-zinc-200 transition hover:bg-white/[0.06]"
                 aria-label="Go back"
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -83,25 +83,24 @@ export function DashboardLayout({
                 </svg>
                 <span className="text-sm font-medium">Back</span>
               </button>
-            ) : null}
+            ) : (
+              <img
+                src="/logo3-dark.svg"
+                alt=""
+                width={44}
+                height={44}
+                decoding="async"
+                className="h-11 w-11 shrink-0 object-contain"
+                aria-hidden
+              />
+            )}
           </div>
 
-          <div className="flex min-w-0 flex-1 items-center justify-center gap-2.5">
-            <img
-              src="/logo3-dark.svg"
-              alt=""
-              width={32}
-              height={32}
-              decoding="async"
-              className="h-8 w-8 shrink-0 object-contain"
-              aria-hidden
-            />
-            <h1 className="min-w-0 truncate text-center text-[17px] font-bold tracking-tight text-white">
-              {title}
-            </h1>
-          </div>
+          <h1 className="min-w-0 max-w-[55vw] justify-self-center truncate text-center text-[17px] font-bold tracking-tight text-white">
+            {title}
+          </h1>
 
-          <div className="flex w-[4.5rem] shrink-0 justify-end">
+          <div className="flex min-w-0 justify-end justify-self-end">
             <DashboardProfileMenu
               displayName={displayName}
               avatarInitial={avatarInitial}

@@ -21,7 +21,7 @@ function FeatureIcon() {
 }
 
 /**
- * Split-screen login: theme-colored brand + light form column, server-rendered.
+ * Split-screen login: brand column + dark form column, server-rendered.
  */
 export function AuthLoginShell({ children, flow = "signin", formVerticalAlign = "center" }: Props) {
   return (

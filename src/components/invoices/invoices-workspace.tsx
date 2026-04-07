@@ -5,7 +5,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
-import type { InvoiceTransportRow, RetailerInvoiceRow } from "@/types/invoice";
+import type { RetailerInvoiceRow } from "@/types/invoice";
 import type { RetailerRow } from "@/types/retailer";
 import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type TransitionEvent } from "react";
@@ -14,18 +14,17 @@ type Props = {
   initialInvoices: RetailerInvoiceRow[];
   initialCompanies: CompanyRow[];
   initialRetailers: RetailerRow[];
-  initialTransports: InvoiceTransportRow[];
 };
 
-type PanelMode = "closed" | "add" | "view" | "edit";
+type PanelMode = "closed" | "add";
 
 const CANVAS = "#101014";
 const INPUT_BG = "#1E1E24";
 
 function fieldClassDark(multiline = false) {
   return [
-    "w-full rounded-xl border border-white/10 px-3.5 py-3 text-[15px] text-white shadow-inner outline-none transition",
-    "placeholder:text-zinc-500 focus:border-zinc-500/60 focus:ring-2 focus:ring-zinc-500/20",
+    "w-full rounded-xl border border-white/10 bg-[#1E1E24] px-3.5 py-3 text-[15px] text-white shadow-inner outline-none transition",
+    "placeholder:text-zinc-500 hover:border-white/15 focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/15",
     multiline ? "min-h-[80px] resize-y" : "",
   ].join(" ");
 }
@@ -49,95 +48,18 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-function gstPercentFromAmounts(basic: number, gstAmt: number): string {
-  if (basic <= 0 || gstAmt < 0) return "";
-  return String(round2((gstAmt / basic) * 100));
-}
-
-function firstTransportForInvoice(transports: InvoiceTransportRow[], invoiceId: string): InvoiceTransportRow | null {
-  const rows = transports.filter((t) => t.invoice_id === invoiceId).sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-  );
-  return rows[0] ?? null;
-}
-
-function ViewRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  const v = value?.trim();
-  return (
-    <div className="border-b border-zinc-800/50 py-3.5 last:border-b-0">
-      <p className="text-xs text-zinc-500">{label}</p>
-      <p className={`mt-1 whitespace-pre-wrap text-[15px] leading-snug text-zinc-100 ${mono ? "font-mono text-sm tracking-tight" : ""}`}>
-        {v || "—"}
-      </p>
-    </div>
-  );
-}
-
 function parseQuantityInput(s: string): number {
   const n = parseInt(String(s).trim().replace(/\D/g, ""), 10);
   if (!Number.isFinite(n) || n < 1) return 0;
   return Math.min(n, 999_999);
 }
 
-function AmountSummaryLine({
-  label,
-  value,
-  emphasis,
-}: {
-  label: string;
-  value: string;
-  emphasis?: "normal" | "medium" | "strong";
-}) {
-  const valCls =
-    emphasis === "strong"
-      ? "text-base font-semibold text-white sm:text-lg"
-      : emphasis === "medium"
-        ? "font-semibold text-zinc-100"
-        : "text-zinc-200";
+function InvoiceDocGlyph({ className }: { className?: string }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-2.5">
-      <span className="max-w-[60%] text-sm leading-snug text-zinc-500">{label}</span>
-      <span className={`shrink-0 text-right font-mono text-[15px] tabular-nums tracking-tight ${valCls}`}>{value}</span>
-    </div>
-  );
-}
-
-function InvoiceAmountBreakdownView({ inv }: { inv: RetailerInvoiceRow }) {
-  const basic = Number(inv.basic_amount ?? 0);
-  const gst = Number(inv.gst_amount ?? 0);
-  const pctStr = gstPercentFromAmounts(basic, gst);
-  const pctDisplay = pctStr ? `${pctStr}%` : "—";
-  const subExclTransport = Number(inv.invoice_amount ?? 0);
-  const transport = Number(inv.transportation_amount ?? 0);
-  const grand = Number(inv.total_amount ?? 0);
-  const qty = Math.max(1, Math.floor(Number(inv.quantity ?? 1)));
-
-  return (
-    <div className="mt-1 overflow-hidden rounded-2xl border border-zinc-800/80 bg-zinc-950/50">
-      <div className="border-b border-zinc-800/60 bg-zinc-900/40 px-4 py-2.5">
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Amount breakdown</h3>
-      </div>
-      <div className="px-4 py-1">
-        <AmountSummaryLine label="Quantity" value={String(qty)} emphasis="normal" />
-        <AmountSummaryLine label="Base amount (before GST)" value={formatInr(basic)} />
-        <AmountSummaryLine
-          label={`GST added (${pctDisplay} on base)`}
-          value={formatInr(gst)}
-          emphasis="normal"
-        />
-        <div className="my-2 border-t border-zinc-800/70" />
-        <AmountSummaryLine
-          label="Subtotal (without transport)"
-          value={formatInr(subExclTransport)}
-          emphasis="medium"
-        />
-        <p className="pb-1 pl-0 text-[11px] leading-relaxed text-zinc-600">Base + GST only — freight not included.</p>
-        <AmountSummaryLine label="Transport" value={formatInr(transport)} />
-        <div className="my-2 border-t border-zinc-800/70" />
-        <AmountSummaryLine label="Total (with transport)" value={formatInr(grand)} emphasis="strong" />
-        <p className="pb-2 text-[11px] leading-relaxed text-zinc-600">Full invoice total including freight.</p>
-      </div>
-    </div>
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -230,7 +152,7 @@ function InvoiceAddStepper({ step }: { step: 1 | 2 }) {
               <div
                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold transition ${
                   active
-                    ? "bg-zinc-300 text-zinc-950 shadow-[0_0_0_3px_rgba(212,212,216,0.2)]"
+                    ? "bg-amber-200 text-amber-950 shadow-[0_0_0_3px_rgba(251,191,36,0.22)]"
                     : done
                       ? "bg-emerald-800/80 text-emerald-100"
                       : "bg-zinc-800 text-zinc-500"
@@ -252,7 +174,7 @@ function InvoiceAddStepper({ step }: { step: 1 | 2 }) {
             <Fragment key={`inv-step-label-${s.n}`}>
               <div className="flex w-9 shrink-0 flex-col items-center">
                 <span
-                  className={`text-center text-[11px] font-medium leading-tight sm:text-xs ${active ? "text-zinc-300" : "text-zinc-500"}`}
+                  className={`text-center text-[11px] font-medium leading-tight sm:text-xs ${active ? "text-amber-200/90" : "text-zinc-500"}`}
                 >
                   {s.label}
                 </span>
@@ -266,27 +188,18 @@ function InvoiceAddStepper({ step }: { step: 1 | 2 }) {
   );
 }
 
-export function InvoicesWorkspace({
-  initialInvoices,
-  initialCompanies,
-  initialRetailers,
-  initialTransports,
-}: Props) {
+export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRetailers }: Props) {
   const router = useRouter();
   const [invoices, setInvoices] = useState<RetailerInvoiceRow[]>(initialInvoices);
   const [companies] = useState<CompanyRow[]>(initialCompanies);
   const [retailers] = useState<RetailerRow[]>(initialRetailers);
-  const [transports, setTransports] = useState<InvoiceTransportRow[]>(initialTransports);
 
   const [panel, setPanel] = useState<PanelMode>("closed");
   const prevPanelRef = useRef<PanelMode>("closed");
   const [sheetOpen, setSheetOpen] = useState(false);
   const sheetOpenRef = useRef(sheetOpen);
   const isAnimatingClose = useRef(false);
-  const [selected, setSelected] = useState<RetailerInvoiceRow | null>(null);
   const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<RetailerInvoiceRow | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [addStep, setAddStep] = useState<1 | 2>(1);
 
   const [companyId, setCompanyId] = useState("");
@@ -307,10 +220,6 @@ export function InvoicesWorkspace({
     setInvoices(initialInvoices);
   }, [initialInvoices]);
 
-  useEffect(() => {
-    setTransports(initialTransports);
-  }, [initialTransports]);
-
   const companyMap = useMemo(() => new Map(companies.map((c) => [c.id, c.name])), [companies]);
   const retailerMap = useMemo(() => new Map(retailers.map((r) => [r.id, r])), [retailers]);
 
@@ -328,36 +237,8 @@ export function InvoicesWorkspace({
     setTransportAmount("");
   }, []);
 
-  const hydrateFromInvoice = useCallback(
-    (inv: RetailerInvoiceRow) => {
-      setCompanyId(inv.company_id);
-      setRetailerId(inv.retailer_id ?? "");
-      setBillDate(inv.bill_date?.slice(0, 10) ?? todayISODate());
-      setInvoiceNumber(inv.invoice_number ?? "");
-      setQuantity(String(Math.max(1, Math.floor(Number(inv.quantity ?? 1)))));
-      const basic = Number(inv.basic_amount ?? 0);
-      const gstAmt = Number(inv.gst_amount ?? 0);
-      setBasicAmount(String(basic));
-      setGstPercent(gstPercentFromAmounts(basic, gstAmt));
-      const t = firstTransportForInvoice(transports, inv.id);
-      if (t) {
-        setTransportName(t.transport_name ?? "");
-        setLrNo(t.lr_no ?? "");
-        setLrDate(t.lr_date?.slice(0, 10) ?? todayISODate());
-        setTransportAmount(String(Number(t.amount ?? 0)));
-      } else {
-        setTransportName("");
-        setLrNo("");
-        setLrDate(todayISODate());
-        setTransportAmount(String(Number(inv.transportation_amount ?? 0)));
-      }
-    },
-    [transports]
-  );
-
   const finalizeClose = useCallback(() => {
     setPanel("closed");
-    setSelected(null);
     resetForm();
     setAddStep(1);
     isAnimatingClose.current = false;
@@ -412,28 +293,9 @@ export function InvoicesWorkspace({
       toastError("Add a retailer first.");
       return;
     }
-    setSelected(null);
     resetForm();
     setAddStep(1);
     setPanel("add");
-  };
-
-  const openView = (inv: RetailerInvoiceRow) => {
-    setSelected(inv);
-    hydrateFromInvoice(inv);
-    setPanel("view");
-  };
-
-  const openEdit = (inv: RetailerInvoiceRow) => {
-    setSelected(inv);
-    hydrateFromInvoice(inv);
-    setAddStep(1);
-    setPanel("edit");
-  };
-
-  const startEdit = () => {
-    if (!selected) return;
-    openEdit(selected);
   };
 
   function validateInvoiceStep(): boolean {
@@ -617,13 +479,6 @@ export function InvoicesWorkspace({
     const finalInv = (fresh ?? inv) as RetailerInvoiceRow;
 
     setInvoices((prev) => [finalInv, ...prev].sort((a, b) => b.bill_date.localeCompare(a.bill_date)));
-    const { data: trRows } = await supabase.from("invoice_transports").select("*").eq("invoice_id", inv.id);
-    if (trRows?.length) {
-      setTransports((prev) => {
-        const rest = prev.filter((t) => t.invoice_id !== inv.id);
-        return [...rest, ...(trRows as InvoiceTransportRow[])];
-      });
-    }
 
     setSaving(false);
     toastSuccess("Invoice saved.");
@@ -631,91 +486,7 @@ export function InvoicesWorkspace({
     router.refresh();
   }
 
-  async function saveEdit() {
-    if (!selected || !validateForm()) return;
-    const retailer = retailerMap.get(retailerId);
-    const company = companies.find((c) => c.id === companyId);
-    if (!retailer || !company) {
-      toastError("Select company and retailer.");
-      return;
-    }
-
-    setSaving(true);
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setSaving(false);
-      toastError("You must be signed in.");
-      return;
-    }
-
-    const paid = Number(selected.payment_received ?? 0);
-    const payload = buildInvoicePayload(user.id, retailer, company, paid);
-    const transportAmt = payload.transportation_amount;
-
-    const { data: row, error } = await supabase
-      .from("retailer_invoices")
-      .update({
-        ...payload,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", selected.id)
-      .select()
-      .single();
-
-    if (error) {
-      setSaving(false);
-      toastError(error.message);
-      return;
-    }
-
-    const tErr = await syncTransportForInvoice(selected.id, user.id, transportAmt);
-    if (tErr.error) {
-      setSaving(false);
-      toastError(tErr.error.message);
-      return;
-    }
-
-    const inv = row as RetailerInvoiceRow;
-    setInvoices((prev) => prev.map((x) => (x.id === inv.id ? inv : x)).sort((a, b) => b.bill_date.localeCompare(a.bill_date)));
-    const { data: trRows } = await supabase.from("invoice_transports").select("*").eq("invoice_id", inv.id);
-    setTransports((prev) => {
-      const rest = prev.filter((t) => t.invoice_id !== inv.id);
-      return [...rest, ...((trRows ?? []) as InvoiceTransportRow[])];
-    });
-    setSelected(inv);
-    setSaving(false);
-    toastSuccess("Invoice updated.");
-    setPanel("view");
-    router.refresh();
-  }
-
-  async function confirmDelete() {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    const supabase = createClient();
-    const { error } = await supabase.from("retailer_invoices").delete().eq("id", deleteTarget.id);
-    setDeleting(false);
-    if (error) {
-      toastError(error.message);
-      return;
-    }
-    setInvoices((prev) => prev.filter((i) => i.id !== deleteTarget.id));
-    setTransports((prev) => prev.filter((t) => t.invoice_id !== deleteTarget.id));
-    toastSuccess("Invoice deleted.");
-    setDeleteTarget(null);
-    if (selected?.id === deleteTarget.id) requestClose();
-    router.refresh();
-  }
-
-  const panelTitle = useMemo(() => {
-    if (panel === "add") return "Add invoice";
-    if (panel === "edit") return "Edit invoice";
-    if (panel === "view") return selected?.invoice_number ?? "Invoice";
-    return "";
-  }, [panel, selected]);
+  const panelTitle = "Add invoice";
 
   const sortedInvoices = useMemo(
     () => [...invoices].sort((a, b) => b.bill_date.localeCompare(a.bill_date)),
@@ -969,11 +740,23 @@ export function InvoicesWorkspace({
       style={{ backgroundColor: CANVAS }}
     >
       <div className="mb-6">
-        <div className="mb-1 flex items-center gap-2">
-          <span className="h-5 w-1 rounded-full bg-zinc-500" aria-hidden />
-          <h2 className="font-login-serif text-xl font-semibold tracking-tight text-white sm:text-2xl">Invoices</h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="mb-1 flex items-center gap-2">
+              <span className="h-5 w-1 rounded-full bg-gradient-to-b from-amber-400 to-amber-700" aria-hidden />
+              <h2 className="font-login-serif text-xl font-semibold tracking-tight text-white sm:text-2xl">Invoices</h2>
+            </div>
+            <p className="max-w-md text-sm leading-relaxed text-zinc-400">
+              Add new invoices here. Open a company or retailer to view or change existing invoices.
+            </p>
+          </div>
+          {sortedInvoices.length > 0 && companies.length > 0 && retailers.length > 0 ? (
+            <span className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-950/30 px-3 py-1.5 text-xs font-semibold text-amber-100/90">
+              <InvoiceDocGlyph className="h-3.5 w-3.5 opacity-90" />
+              {sortedInvoices.length} invoice{sortedInvoices.length === 1 ? "" : "s"}
+            </span>
+          ) : null}
         </div>
-        <p className="text-sm text-zinc-400">Create invoices with line totals, GST, and transport details.</p>
       </div>
 
       {companies.length === 0 || retailers.length === 0 ? (
@@ -990,41 +773,47 @@ export function InvoicesWorkspace({
           <button
             type="button"
             onClick={openAdd}
-            className="mt-6 rounded-xl bg-zinc-300 px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200"
+            className="mt-6 rounded-xl bg-gradient-to-br from-amber-200 to-amber-100 px-5 py-3 text-sm font-semibold text-amber-950 shadow-[0_4px_20px_rgba(251,191,36,0.28)] transition hover:from-amber-100 hover:to-amber-50"
           >
             Add your first invoice
           </button>
         </div>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-3">
           {sortedInvoices.map((inv) => {
             const co = companyMap.get(inv.company_id) ?? "—";
             const q = Math.max(1, Math.floor(Number(inv.quantity ?? 1)));
             return (
               <li key={inv.id}>
-                <button
-                  type="button"
-                  onClick={() => openView(inv)}
-                  className="group flex w-full items-stretch overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950/35 text-left transition hover:border-zinc-600/80 hover:bg-zinc-900/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500"
-                >
-                  <span className="w-1 shrink-0 bg-amber-600/80" aria-hidden />
-                  <div className="flex min-w-0 flex-1 items-center gap-3 py-3.5 pl-3 pr-4">
+                <div className="flex w-full items-stretch overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-950/95 to-zinc-900/50 text-left shadow-[0_4px_24px_rgba(0,0,0,0.35)] ring-1 ring-white/[0.03]">
+                  <span
+                    className="w-1.5 shrink-0 bg-gradient-to-b from-amber-400/90 to-amber-700/80"
+                    aria-hidden
+                  />
+                  <div className="flex min-w-0 flex-1 items-center gap-3 py-4 pl-3 pr-4 sm:gap-4 sm:pl-4">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-zinc-700/50 bg-zinc-900/90 text-amber-400/90 shadow-inner">
+                      <InvoiceDocGlyph className="h-5 w-5" />
+                    </div>
                     <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-base font-semibold text-white">{inv.invoice_number}</h3>
-                      <p className="mt-0.5 text-sm text-zinc-400">
-                        {inv.retailer_name?.trim() || "Retailer"} · {co}
+                      <p className="truncate font-mono text-[15px] font-semibold tracking-tight text-white sm:text-base">
+                        {inv.invoice_number}
                       </p>
-                      <p className="mt-0.5 text-xs text-zinc-500">
-                        {inv.bill_date} · Qty {q} · {formatInr(Number(inv.total_amount ?? 0))}
+                      <p className="mt-1 text-sm text-zinc-400">
+                        {inv.retailer_name?.trim() || "Retailer"}{" "}
+                        <span className="text-zinc-600">·</span> {co}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {inv.bill_date?.slice(0, 10) ?? "—"} · Qty {q}
                       </p>
                     </div>
-                    <span className="shrink-0 text-zinc-600 transition group-hover:text-zinc-400" aria-hidden>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </span>
+                    <div className="flex shrink-0 flex-col items-end">
+                      <span className="font-mono text-sm font-semibold tabular-nums tracking-tight text-amber-200 sm:text-[15px]">
+                        {formatInr(Number(inv.total_amount ?? 0))}
+                      </span>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Total</span>
+                    </div>
                   </div>
-                </button>
+                </div>
               </li>
             );
           })}
@@ -1035,7 +824,7 @@ export function InvoicesWorkspace({
         <button
           type="button"
           onClick={openAdd}
-          className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-300 text-zinc-950 shadow-lg transition hover:scale-105 hover:bg-zinc-200 active:scale-95 md:bottom-10 md:right-10"
+          className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-200 to-amber-100 text-amber-950 shadow-[0_8px_32px_rgba(251,191,36,0.35),0_2px_8px_rgba(0,0,0,0.4)] ring-2 ring-[#101014] transition hover:scale-105 hover:from-amber-100 hover:to-amber-50 active:scale-95 md:bottom-10 md:right-10"
           aria-label="Add invoice"
         >
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
@@ -1053,7 +842,7 @@ export function InvoicesWorkspace({
             onClick={() => !saving && requestClose()}
           />
           <div
-            className="fixed inset-x-0 bottom-0 top-12 z-[90] flex max-h-[100dvh] flex-col rounded-t-3xl border border-zinc-700/90 bg-[#16181f] shadow-[0_-12px_40px_rgba(0,0,0,0.45)] md:left-auto md:right-0 md:top-0 md:max-h-none md:w-full md:max-w-lg md:rounded-none md:rounded-l-3xl md:border-l md:border-t-0"
+            className="fixed inset-x-0 bottom-0 top-12 z-[90] flex min-h-0 max-h-[100dvh] flex-col rounded-t-3xl border border-zinc-700/90 bg-[#16181f] shadow-[0_-12px_40px_rgba(0,0,0,0.45)] md:left-auto md:right-0 md:top-0 md:max-h-none md:w-full md:max-w-lg md:rounded-none md:rounded-l-3xl md:border-l md:border-t-0"
             role="dialog"
             aria-modal="true"
             aria-labelledby="invoice-sheet-title"
@@ -1065,16 +854,12 @@ export function InvoicesWorkspace({
             }}
           >
             <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-zinc-600 md:hidden" aria-hidden />
-            <div className="flex shrink-0 items-center gap-3 border-b border-zinc-700/80 px-4 py-3">
+            <div className="flex shrink-0 items-center gap-3 border-b border-zinc-700/80 bg-gradient-to-b from-[#181a22] to-[#16181f] px-4 py-3.5">
               <button
                 type="button"
                 onClick={() => {
                   if (panel === "add" && addStep > 1) {
                     setAddStep(1);
-                    return;
-                  }
-                  if (panel === "edit") {
-                    setPanel("view");
                     return;
                   }
                   requestClose();
@@ -1101,68 +886,18 @@ export function InvoicesWorkspace({
               </button>
             </div>
 
-            <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-32">
-              {panel === "view" && selected && (
-                <div>
-                  <div className="mb-4 flex justify-end gap-4 border-b border-zinc-800/50 pb-3">
-                    <button type="button" onClick={startEdit} className="text-sm font-medium text-zinc-400 transition hover:text-white">
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeleteTarget(selected)}
-                      className="text-sm font-medium text-red-400/90 transition hover:text-red-300"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                  <div>
-                    <ViewRow label="Company" value={companyMap.get(selected.company_id) ?? ""} />
-                    <ViewRow label="Retailer" value={selected.retailer_name ?? ""} />
-                    <ViewRow label="Invoice date" value={selected.bill_date ?? ""} />
-                    <ViewRow label="Invoice no." value={selected.invoice_number ?? ""} mono />
-                    <InvoiceAmountBreakdownView inv={selected} />
-                    <div className="mt-5">
-                      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Transporter &amp; LR</h3>
-                      {(() => {
-                        const t = firstTransportForInvoice(transports, selected.id);
-                        if (!t) {
-                          return <ViewRow label="Transport" value="No transport line saved for this invoice." />;
-                        }
-                        return (
-                          <>
-                            <ViewRow label="Transport name" value={t.transport_name} />
-                            <ViewRow label="LR no." value={t.lr_no ?? ""} mono />
-                            <ViewRow label="LR date" value={t.lr_date ?? ""} />
-                            <ViewRow label="Transport line amount" value={formatInr(Number(t.amount ?? 0))} />
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {(panel === "add" || panel === "edit") && (
+            <div className="relative min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-32">
+              {panel === "add" && (
                 <form
                   id="invoice-form"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    if (panel === "add" && addStep === 1) return;
-                    void (panel === "add" ? saveNew() : saveEdit());
+                    if (addStep === 1) return;
+                    void saveNew();
                   }}
                 >
-                  {panel === "add" ? <InvoiceAddStepper step={addStep} /> : null}
-                  {panel === "edit" ? (
-                    <div className="space-y-6">
-                      {invoiceFormStep}
-                      {transportFormStep}
-                    </div>
-                  ) : addStep === 1 ? (
-                    invoiceFormStep
-                  ) : (
-                    transportFormStep
-                  )}
+                  <InvoiceAddStepper step={addStep} />
+                  {addStep === 1 ? invoiceFormStep : transportFormStep}
                 </form>
               )}
             </div>
@@ -1185,7 +920,7 @@ export function InvoicesWorkspace({
                       if (!validateInvoiceStep()) return;
                       setAddStep(2);
                     }}
-                    className="flex min-h-[48px] flex-[1.15] items-center justify-center gap-2 rounded-xl bg-zinc-300 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 disabled:opacity-50"
+                    className="flex min-h-[48px] flex-[1.15] items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-amber-200 to-amber-100 py-3 text-sm font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition hover:from-amber-100 hover:to-amber-50 disabled:opacity-50"
                   >
                     Continue
                     <span aria-hidden>→</span>
@@ -1209,7 +944,7 @@ export function InvoicesWorkspace({
                     type="submit"
                     form="invoice-form"
                     disabled={saving}
-                    className="min-h-[48px] flex-[1.15] rounded-xl bg-zinc-300 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 disabled:opacity-50"
+                    className="min-h-[48px] flex-[1.15] rounded-xl bg-gradient-to-br from-amber-200 to-amber-100 py-3 text-sm font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition hover:from-amber-100 hover:to-amber-50 disabled:opacity-50"
                   >
                     {saving ? "Saving…" : "Save invoice"}
                   </button>
@@ -1217,65 +952,6 @@ export function InvoicesWorkspace({
               </div>
             )}
 
-            {panel === "edit" && (
-              <div className="absolute bottom-0 left-0 right-0 border-t border-zinc-700/80 bg-[#16181f]/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => selected && setPanel("view")}
-                    className="min-h-[48px] flex-1 rounded-xl border border-white/20 py-3 text-sm font-semibold text-white hover:bg-white/5 disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    form="invoice-form"
-                    disabled={saving}
-                    className="min-h-[48px] flex-1 rounded-xl bg-zinc-300 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 disabled:opacity-50"
-                  >
-                    {saving ? "Saving…" : "Save changes"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {deleteTarget && (
-        <>
-          <div className="fixed inset-0 z-[100] bg-black/70" aria-hidden onClick={() => !deleting && setDeleteTarget(null)} />
-          <div
-            role="alertdialog"
-            aria-labelledby="inv-del-title"
-            className="fixed left-1/2 top-1/2 z-[101] w-[min(100%-2rem,22rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-zinc-700 bg-[#1A1C26] p-5 shadow-xl"
-          >
-            <h3 id="inv-del-title" className="text-lg font-semibold text-white">
-              Delete invoice?
-            </h3>
-            <p className="mt-2 text-sm text-zinc-400">
-              Remove invoice <span className="font-medium text-white">&ldquo;{deleteTarget.invoice_number}&rdquo;</span>? Transport, returns,
-              payments, and commission rows linked to it will be removed too.
-            </p>
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                disabled={deleting}
-                onClick={() => setDeleteTarget(null)}
-                className="rounded-xl px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-white/5 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deleting}
-                onClick={() => void confirmDelete()}
-                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-              >
-                {deleting ? "Deleting…" : "Delete"}
-              </button>
-            </div>
           </div>
         </>
       )}
