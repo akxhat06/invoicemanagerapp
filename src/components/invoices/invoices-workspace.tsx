@@ -7,6 +7,7 @@ import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
 import type { RetailerInvoiceRow } from "@/types/invoice";
 import type { RetailerRow } from "@/types/retailer";
+import { useWorkspaceUiSession } from "@/hooks/use-workspace-ui-session";
 import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type TransitionEvent } from "react";
 
@@ -17,6 +18,23 @@ type Props = {
 };
 
 type PanelMode = "closed" | "add";
+
+type InvoicesUiSessionV1 = {
+  v: 1;
+  panel: PanelMode;
+  addStep: 1 | 2;
+  companyId: string;
+  retailerId: string;
+  billDate: string;
+  invoiceNumber: string;
+  quantity: string;
+  basicAmount: string;
+  gstPercent: string;
+  transportName: string;
+  lrNo: string;
+  lrDate: string;
+  transportAmount: string;
+};
 
 const CANVAS = "#101014";
 const INPUT_BG = "#1E1E24";
@@ -236,6 +254,69 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
     setLrDate(todayISODate());
     setTransportAmount("");
   }, []);
+
+  const applyInvoicesUiSession = useCallback(
+    (s: InvoicesUiSessionV1) => {
+      if (s.panel === "closed") {
+        setPanel("closed");
+        resetForm();
+        setAddStep(1);
+        return;
+      }
+      setPanel("add");
+      setAddStep(s.addStep ?? 1);
+      setCompanyId(s.companyId ?? "");
+      setRetailerId(s.retailerId ?? "");
+      setBillDate(s.billDate || todayISODate());
+      setInvoiceNumber(s.invoiceNumber ?? "");
+      setQuantity(s.quantity ?? "1");
+      setBasicAmount(s.basicAmount ?? "");
+      setGstPercent(s.gstPercent ?? "");
+      setTransportName(s.transportName ?? "");
+      setLrNo(s.lrNo ?? "");
+      setLrDate(s.lrDate || todayISODate());
+      setTransportAmount(s.transportAmount ?? "");
+    },
+    [resetForm]
+  );
+
+  useWorkspaceUiSession<InvoicesUiSessionV1>({
+    route: "invoices",
+    version: 1,
+    restoreReady: true,
+    buildSnapshot: () => ({
+      v: 1,
+      panel,
+      addStep,
+      companyId,
+      retailerId,
+      billDate,
+      invoiceNumber,
+      quantity,
+      basicAmount,
+      gstPercent,
+      transportName,
+      lrNo,
+      lrDate,
+      transportAmount,
+    }),
+    applyRestore: applyInvoicesUiSession,
+    saveDeps: [
+      panel,
+      addStep,
+      companyId,
+      retailerId,
+      billDate,
+      invoiceNumber,
+      quantity,
+      basicAmount,
+      gstPercent,
+      transportName,
+      lrNo,
+      lrDate,
+      transportAmount,
+    ],
+  });
 
   const finalizeClose = useCallback(() => {
     setPanel("closed");

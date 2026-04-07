@@ -7,6 +7,7 @@ import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
 import type { RetailerInvoiceRow } from "@/types/invoice";
+import { useWorkspaceUiSession } from "@/hooks/use-workspace-ui-session";
 import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
@@ -19,6 +20,31 @@ type Props = {
 type PanelMode = "closed" | "add" | "view" | "edit";
 
 type CompanyViewTab = "profile" | "invoices";
+
+type CompaniesUiSessionV1 = {
+  v: 1;
+  panel: PanelMode;
+  selectedId: string | null;
+  companyViewTab: CompanyViewTab;
+  addStep: 1 | 2 | 3;
+  inlineInvoiceEditId: string | null;
+  draft: {
+    name: string;
+    address: string;
+    contactDigits: string;
+    email: string;
+    city: string;
+    stateVal: string;
+    pinCode: string;
+    telephone: string;
+    alternativeDigits: string;
+    gstNo: string;
+    bankName: string;
+    bankAccountNumber: string;
+    bankIfsc: string;
+    bankBranch: string;
+  } | null;
+};
 
 /** Charcoal surface — slightly lifted from pure black */
 const CANVAS = "#101014";
@@ -275,6 +301,7 @@ export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByComp
   const [inlineInvoiceEdit, setInlineInvoiceEdit] = useState<RetailerInvoiceRow | null>(null);
   const [invoiceCountByCompany, setInvoiceCountByCompany] = useState<Record<string, number>>(initialInvoiceCountByCompany);
   const [companyViewTab, setCompanyViewTab] = useState<CompanyViewTab>("profile");
+  const pendingInlineInvoiceIdRef = useRef<string | null>(null);
 
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
@@ -333,6 +360,19 @@ export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByComp
     };
   }, [panel, selected?.id]);
 
+  useEffect(() => {
+    const pid = pendingInlineInvoiceIdRef.current;
+    if (!pid || panel !== "view" || !selected) return;
+    if (companyInvoicesLoading) return;
+    const inv = companyInvoices.find((i) => i.id === pid);
+    if (inv) {
+      setInlineInvoiceEdit(inv);
+      pendingInlineInvoiceIdRef.current = null;
+      return;
+    }
+    pendingInlineInvoiceIdRef.current = null;
+  }, [companyInvoices, companyInvoicesLoading, panel, selected?.id]);
+
   const resetForm = useCallback(() => {
     setName("");
     setAddress("");
@@ -366,6 +406,132 @@ export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByComp
     setBankIfsc(c.bank_ifsc ?? "");
     setBankBranch(c.bank_branch ?? "");
   }, []);
+
+  const applyCompaniesUiSession = useCallback(
+    (s: CompaniesUiSessionV1) => {
+      pendingInlineInvoiceIdRef.current = null;
+      if (s.panel === "closed") {
+        setPanel("closed");
+        setSelected(null);
+        setInlineInvoiceEdit(null);
+        setCompanyViewTab("profile");
+        setAddStep(1);
+        resetForm();
+        return;
+      }
+      setPanel(s.panel);
+      setCompanyViewTab(s.companyViewTab ?? "profile");
+      setAddStep(s.addStep ?? 1);
+      if (s.selectedId) {
+        const c = companies.find((x) => x.id === s.selectedId);
+        if (!c) {
+          setPanel("closed");
+          setSelected(null);
+          setInlineInvoiceEdit(null);
+          resetForm();
+          return;
+        }
+        setSelected(c);
+        if (s.draft && (s.panel === "add" || s.panel === "edit")) {
+          setName(s.draft.name);
+          setAddress(s.draft.address);
+          setContactDigits(s.draft.contactDigits);
+          setEmail(s.draft.email);
+          setCity(s.draft.city);
+          setStateVal(s.draft.stateVal);
+          setPinCode(s.draft.pinCode);
+          setTelephone(s.draft.telephone);
+          setAlternativeDigits(s.draft.alternativeDigits);
+          setGstNo(s.draft.gstNo);
+          setBankName(s.draft.bankName);
+          setBankAccountNumber(s.draft.bankAccountNumber);
+          setBankIfsc(s.draft.bankIfsc);
+          setBankBranch(s.draft.bankBranch);
+        } else if (s.panel === "edit") {
+          hydrateFromCompany(c);
+        }
+      } else if (s.panel === "add") {
+        setSelected(null);
+        if (s.draft) {
+          setName(s.draft.name);
+          setAddress(s.draft.address);
+          setContactDigits(s.draft.contactDigits);
+          setEmail(s.draft.email);
+          setCity(s.draft.city);
+          setStateVal(s.draft.stateVal);
+          setPinCode(s.draft.pinCode);
+          setTelephone(s.draft.telephone);
+          setAlternativeDigits(s.draft.alternativeDigits);
+          setGstNo(s.draft.gstNo);
+          setBankName(s.draft.bankName);
+          setBankAccountNumber(s.draft.bankAccountNumber);
+          setBankIfsc(s.draft.bankIfsc);
+          setBankBranch(s.draft.bankBranch);
+        } else {
+          resetForm();
+        }
+      }
+      if (s.inlineInvoiceEditId) {
+        pendingInlineInvoiceIdRef.current = s.inlineInvoiceEditId;
+      }
+    },
+    [companies, hydrateFromCompany, resetForm]
+  );
+
+  useWorkspaceUiSession<CompaniesUiSessionV1>({
+    route: "companies",
+    version: 1,
+    restoreReady: true,
+    buildSnapshot: () => ({
+      v: 1,
+      panel,
+      selectedId: selected?.id ?? null,
+      companyViewTab,
+      addStep,
+      inlineInvoiceEditId: inlineInvoiceEdit?.id ?? null,
+      draft:
+        panel === "add" || panel === "edit"
+          ? {
+              name,
+              address,
+              contactDigits,
+              email,
+              city,
+              stateVal,
+              pinCode,
+              telephone,
+              alternativeDigits,
+              gstNo,
+              bankName,
+              bankAccountNumber,
+              bankIfsc,
+              bankBranch,
+            }
+          : null,
+    }),
+    applyRestore: applyCompaniesUiSession,
+    saveDeps: [
+      panel,
+      selected?.id,
+      companyViewTab,
+      addStep,
+      inlineInvoiceEdit?.id,
+      name,
+      address,
+      contactDigits,
+      email,
+      city,
+      stateVal,
+      pinCode,
+      telephone,
+      alternativeDigits,
+      gstNo,
+      bankName,
+      bankAccountNumber,
+      bankIfsc,
+      bankBranch,
+    ],
+  });
 
   const finalizeClose = useCallback(() => {
     setPanel("closed");

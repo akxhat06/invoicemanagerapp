@@ -36,6 +36,7 @@ export default async function DashboardHomePage() {
     invRes,
     invThisRes,
     invLastRes,
+    invBilledSumRes,
   ] = await Promise.all([
     supabase.from("companies").select("id", { count: "exact", head: true }),
     supabase.from("companies").select("id", { count: "exact", head: true }).or("is_draft.eq.false,is_draft.is.null"),
@@ -52,6 +53,10 @@ export default async function DashboardHomePage() {
       .select("id", { count: "exact", head: true })
       .gte("bill_date", lastMonth.first)
       .lte("bill_date", lastMonth.last),
+    supabase
+      .from("retailer_invoices")
+      .select("total_amount")
+      .or("is_draft.eq.false,is_draft.is.null"),
   ]);
 
   const err =
@@ -61,7 +66,8 @@ export default async function DashboardHomePage() {
     retNewRes.error ||
     invRes.error ||
     invThisRes.error ||
-    invLastRes.error;
+    invLastRes.error ||
+    invBilledSumRes.error;
 
   if (err) {
     return (
@@ -86,11 +92,19 @@ export default async function DashboardHomePage() {
     invoiceMonthTrendPct = 100;
   }
 
+  /** Sum in JS — PostgREST aggregate (e.g. total_amount.sum()) is disabled on this project. */
+  const companiesTotalBilledSafe = (invBilledSumRes.data ?? []).reduce((acc, row) => {
+    const raw = (row as { total_amount?: number | string | null }).total_amount;
+    const n = raw === null || raw === undefined ? 0 : typeof raw === "string" ? parseFloat(raw) : Number(raw);
+    return acc + (Number.isFinite(n) ? n : 0);
+  }, 0);
+
   return (
     <DashboardHomeView
       username={username}
       email={user.email ?? ""}
       companyCount={companyCount}
+      companiesTotalBilled={companiesTotalBilledSafe}
       activeCompaniesCount={activeCompaniesCount}
       retailerCount={retailerCount}
       retailersNew30d={retailersNew30d}
