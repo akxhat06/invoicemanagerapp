@@ -6,7 +6,7 @@ export default async function CompaniesPage() {
   const supabase = await createClient();
   const [coRes, invRes] = await Promise.all([
     supabase.from("companies").select("*").order("updated_at", { ascending: false }),
-    supabase.from("retailer_invoices").select("company_id"),
+    supabase.from("retailer_invoices").select("company_id, total_amount"),
   ]);
 
   const error = coRes.error || invRes.error;
@@ -19,10 +19,14 @@ export default async function CompaniesPage() {
   }
 
   const invoiceCountByCompany: Record<string, number> = {};
+  const totalAmountByCompany: Record<string, number> = {};
   for (const row of invRes.data ?? []) {
     const cid = row.company_id as string | null;
     if (cid) {
       invoiceCountByCompany[cid] = (invoiceCountByCompany[cid] ?? 0) + 1;
+      const raw = row.total_amount as number | string | null;
+      const n = raw === null || raw === undefined ? 0 : typeof raw === "string" ? parseFloat(raw) : Number(raw);
+      totalAmountByCompany[cid] = (totalAmountByCompany[cid] ?? 0) + (Number.isFinite(n) ? n : 0);
     }
   }
 
@@ -30,6 +34,7 @@ export default async function CompaniesPage() {
     <CompaniesWorkspace
       initialCompanies={(coRes.data ?? []) as CompanyRow[]}
       initialInvoiceCountByCompany={invoiceCountByCompany}
+      initialTotalAmountByCompany={totalAmountByCompany}
     />
   );
 }
