@@ -564,6 +564,18 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
     () => [...invoices].sort((a, b) => b.bill_date.localeCompare(a.bill_date)),
     [invoices]
   );
+  const invoiceTotals = useMemo(() => {
+    let totalAmount = 0;
+    let totalTransportAmount = 0;
+    for (const inv of sortedInvoices) {
+      totalAmount += Number(inv.total_amount ?? 0);
+      totalTransportAmount += Number(inv.transportation_amount ?? 0);
+    }
+    return {
+      totalAmount: round2(totalAmount),
+      totalTransportAmount: round2(totalTransportAmount),
+    };
+  }, [sortedInvoices]);
 
   const computedGstAmountPreview = useMemo(() => round2(toNum(gstAmount)), [gstAmount]);
 
@@ -841,10 +853,26 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
             </p>
           </div>
           {sortedInvoices.length > 0 && companies.length > 0 && retailers.length > 0 ? (
-            <span className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-950/30 px-3 py-1.5 text-xs font-semibold text-amber-100/90">
-              <InvoiceDocGlyph className="h-3.5 w-3.5 opacity-90" />
-              {sortedInvoices.length} invoice{sortedInvoices.length === 1 ? "" : "s"}
-            </span>
+            <div className="w-full">
+              <span className="mb-2 inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-950/30 px-3 py-1.5 text-xs font-semibold text-amber-100/90">
+                <InvoiceDocGlyph className="h-3.5 w-3.5 opacity-90" />
+                {sortedInvoices.length} invoice{sortedInvoices.length === 1 ? "" : "s"}
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 p-3 ring-1 ring-amber-500/10">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-500">Total amount</p>
+                  <p className="mt-1 font-mono text-sm font-semibold tabular-nums text-amber-100">
+                    {formatInr(invoiceTotals.totalAmount)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-sky-500/20 bg-sky-950/20 p-3 ring-1 ring-sky-500/10">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-500">Transport amount</p>
+                  <p className="mt-1 font-mono text-sm font-semibold tabular-nums text-sky-200">
+                    {formatInr(invoiceTotals.totalTransportAmount)}
+                  </p>
+                </div>
+              </div>
+            </div>
           ) : null}
         </div>
       </div>
