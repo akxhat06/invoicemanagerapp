@@ -13,13 +13,17 @@ const INPUT_BG = "#1E1E24";
 
 function fieldClassDark(multiline = false) {
   return [
-    "w-full rounded-xl border border-white/10 px-3.5 py-3 text-[15px] text-white shadow-inner outline-none transition",
-    "placeholder:text-zinc-500 focus:border-zinc-500/60 focus:ring-2 focus:ring-zinc-500/20",
+    "w-full rounded-xl border border-white/10 bg-[#1E1E24] px-3.5 py-3 text-[15px] text-white shadow-inner outline-none transition",
+    "placeholder:text-zinc-500 hover:border-white/15 focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/15",
     multiline ? "min-h-[80px] resize-y" : "",
   ].join(" ");
 }
 
 const labelDark = "mb-1.5 block text-sm font-medium text-zinc-100";
+
+const SECTION_WRAP =
+  "rounded-2xl border border-zinc-800/70 bg-zinc-950/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ring-1 ring-white/[0.03] sm:p-5";
+const SECTION_TITLE = "mb-4 text-[11px] font-bold uppercase tracking-[0.16em] text-amber-200/85";
 
 function todayISODate() {
   const d = new Date();
@@ -388,8 +392,10 @@ export function InvoiceEditForm({
     <div className="flex min-h-0 w-full flex-1 flex-col">
       {/* Scroll only the form; footer stays after all fields (never between inputs). */}
       <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
-        <form id="invoice-edit-inline-form" className="space-y-6 pb-4" onSubmit={onSubmit}>
-        <div className="space-y-4">
+        <form id="invoice-edit-inline-form" className="space-y-5 pb-4" onSubmit={onSubmit}>
+        <div className={SECTION_WRAP}>
+          <h3 className={SECTION_TITLE}>Party &amp; document</h3>
+          <div className="space-y-4">
           <div>
             <label className={labelDark} htmlFor="inv-edit-company">
               Company <span className="text-red-400">*</span>
@@ -493,7 +499,12 @@ export function InvoiceEditForm({
             />
             <p className="mt-1 text-[11px] text-zinc-500">Number of units for this invoice (whole number).</p>
           </div>
+          </div>
+        </div>
 
+        <div className={SECTION_WRAP}>
+          <h3 className={SECTION_TITLE}>Amounts</h3>
+          <div className="space-y-4">
           <div>
             <label className={labelDark} htmlFor="inv-edit-basic">
               Base amount <span className="text-red-400">*</span>
@@ -527,42 +538,57 @@ export function InvoiceEditForm({
             <p className="mt-1 text-[11px] text-zinc-500">GST amount = base × % ÷ 100.</p>
           </div>
 
-          <div>
-            <label className={labelDark}>GST amount</label>
-            <div className={`${fieldClassDark()} text-zinc-300`} style={inputStyle} aria-live="polite">
-              {formatInr(computedGstAmountPreview)}
+          <div className="rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-950/35 via-zinc-950/50 to-zinc-950 p-4 ring-1 ring-amber-500/10">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200/80">Live preview</p>
+            <div className="mt-3 space-y-3">
+              <div>
+                <label className={labelDark}>GST amount</label>
+                <div
+                  className={`${fieldClassDark()} border-amber-500/15 text-zinc-200`}
+                  style={inputStyle}
+                  aria-live="polite"
+                >
+                  {formatInr(computedGstAmountPreview)}
+                </div>
+              </div>
+              <div>
+                <label className={labelDark}>Invoice amount</label>
+                <div
+                  className={`${fieldClassDark()} border-amber-500/25 font-semibold text-amber-100`}
+                  style={inputStyle}
+                  aria-live="polite"
+                >
+                  {formatInr(computedInvoiceAmountPreview)}
+                </div>
+                <p className="mt-1 text-[11px] text-zinc-500">Base + GST (saved on the invoice before transport).</p>
+              </div>
             </div>
           </div>
-
-          <div>
-            <label className={labelDark}>Invoice amount</label>
-            <div className={`${fieldClassDark()} font-medium text-white`} style={inputStyle} aria-live="polite">
-              {formatInr(computedInvoiceAmountPreview)}
-            </div>
-            <p className="mt-1 text-[11px] text-zinc-500">Base amount + GST amount (saved on the invoice).</p>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-xl border border-sky-900/50 bg-sky-950/40 p-4">
+        <div className={SECTION_WRAP}>
+          <h3 className={SECTION_TITLE}>Transport</h3>
+          <div className="space-y-4">
+          <div className="rounded-xl border border-sky-900/45 bg-sky-950/35 p-4 ring-1 ring-sky-500/10">
             <div className="flex gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-500/20 text-sky-300">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-500/15 text-sky-300">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M1 3h15v13H1zM16 8h4l3 3v5h-7V8z" strokeLinecap="round" strokeLinejoin="round" />
                   <path d="M5 21h10M8 21v-4M12 21v-4" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-semibold text-sky-200">Transport details</p>
-                <p className="mt-1 text-xs text-sky-200/70">
+                <p className="text-sm font-semibold text-sky-200">Freight &amp; LR</p>
+                <p className="mt-1 text-xs leading-relaxed text-sky-200/65">
                   Optional — leave blank if there is no freight for this invoice.
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-zinc-900/30 p-4">
-            <p className="mb-3 text-sm font-semibold text-zinc-200">Transport</p>
+          <div className="rounded-xl border border-zinc-700/60 bg-zinc-900/25 p-4">
+            <p className="mb-3 text-sm font-semibold text-zinc-200">Transporter fields</p>
             <div className="space-y-4">
               <div>
                 <label className={labelDark} htmlFor="inv-edit-tr-name">
@@ -613,17 +639,18 @@ export function InvoiceEditForm({
               </div>
             </div>
           </div>
+          </div>
         </div>
         </form>
       </div>
 
-      <div className="shrink-0 border-t border-zinc-700/80 bg-[#16181f] px-0 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="shrink-0 border-t border-zinc-700/80 bg-[#16181f]/95 px-0 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md supports-[backdrop-filter]:bg-[#16181f]/88">
         <div className="flex gap-3">
           <button
             type="button"
             disabled={saving}
             onClick={onCancel}
-            className="min-h-[48px] flex-1 rounded-xl border border-white/20 py-3 text-sm font-semibold text-white hover:bg-white/5 disabled:opacity-50"
+            className="min-h-[48px] flex-1 rounded-xl border border-white/20 py-3 text-sm font-semibold text-white transition hover:bg-white/5 disabled:opacity-50"
           >
             Cancel
           </button>
@@ -631,7 +658,7 @@ export function InvoiceEditForm({
             type="submit"
             form="invoice-edit-inline-form"
             disabled={saving}
-            className="min-h-[48px] flex-1 rounded-xl bg-zinc-300 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 disabled:opacity-50"
+            className="min-h-[48px] flex-1 rounded-xl bg-gradient-to-br from-amber-200 to-amber-100 py-3 text-sm font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition hover:from-amber-100 hover:to-amber-50 disabled:opacity-50"
           >
             {saving ? "Saving…" : "Save changes"}
           </button>

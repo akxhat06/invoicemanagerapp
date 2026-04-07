@@ -61,7 +61,7 @@ const ICONS: Record<DashboardNavKey, typeof IconDashboard> = {
   invoices: IconInvoices,
 };
 
-const ACCENT = "#a1a1aa";
+const ACCENT = "#c4b5fd";
 
 export function DashboardSidebar({
   displayName,
@@ -98,20 +98,24 @@ export function DashboardSidebar({
               <li key={key}>
                 <Link
                   href={href}
-                  className={`group relative flex items-center gap-3 rounded-lg px-3 py-2.5 pl-3 text-[14px] font-medium transition-colors ${
+                  aria-current={active ? "page" : undefined}
+                  className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 pl-3 text-[14px] font-medium transition-colors ${
                     active
-                      ? "bg-white/[0.08] text-white"
+                      ? "bg-violet-500/12 text-violet-100 ring-1 ring-violet-500/20"
                       : "text-white/65 hover:bg-white/[0.05] hover:text-white/90"
                   }`}
                 >
                   {active && (
                     <span
-                      className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full"
-                      style={{ backgroundColor: ACCENT }}
+                      className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-violet-400"
                       aria-hidden
                     />
                   )}
-                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "text-white" : "text-white/55 group-hover:text-white/80"}`}>
+                  <span
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                      active ? "text-violet-200" : "text-white/55 group-hover:text-white/80"
+                    }`}
+                  >
                     <Icon />
                   </span>
                   <span className="min-w-0 flex-1 leading-snug">{label}</span>

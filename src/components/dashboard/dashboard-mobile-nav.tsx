@@ -56,16 +56,14 @@ const ICONS: Record<DashboardNavKey, typeof IconDashboard> = {
   invoices: IconInvoices,
 };
 
-const ACCENT = "#e4e4e7";
-
 export function DashboardMobileNav({ pathname, invoiceBadgeCount }: Props) {
   return (
     <nav
-      className="dashboard-app-sidebar fixed bottom-0 left-0 right-0 z-40 border-t border-white/[0.08] pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1 md:hidden"
+      className="dashboard-app-sidebar fixed bottom-0 left-0 right-0 z-40 border-t border-white/[0.08] bg-[#0a0a0c]/95 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-md md:hidden"
       aria-label="Primary"
       data-tour="bottom-nav"
     >
-      <ul className="flex items-stretch justify-around px-1">
+      <ul className="flex items-end justify-around gap-0.5 px-1">
         {DASHBOARD_NAV_ITEMS.map(({ key, label, href, showBadge }) => {
           const active = isDashboardNavActive(pathname, key);
           const Icon = ICONS[key];
@@ -75,28 +73,26 @@ export function DashboardMobileNav({ pathname, invoiceBadgeCount }: Props) {
             <li key={key} className="flex min-w-0 flex-1 justify-center">
               <Link
                 href={href}
-                className={`flex w-full max-w-[4.5rem] flex-col items-center gap-0.5 py-2 text-[10px] font-semibold leading-tight transition-colors ${
-                  active ? "" : "text-white/50"
+                aria-current={active ? "page" : undefined}
+                className={`flex w-full max-w-[5.25rem] flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-[10px] font-semibold leading-tight transition-colors ${
+                  active
+                    ? "bg-zinc-800/90 text-violet-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ring-1 ring-violet-500/25"
+                    : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-400"
                 }`}
-                style={active ? { color: ACCENT } : undefined}
               >
-                <span className="relative flex h-8 w-8 items-center justify-center">
-                  <Icon className={active ? "" : "opacity-90"} />
+                <span className="relative flex h-8 w-8 items-center justify-center [&_svg]:stroke-current">
+                  <Icon className={active ? "text-violet-200" : "text-zinc-500"} />
                   {badge !== null && (
                     <span
-                      className="absolute -right-1 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"
-                      style={{ backgroundColor: ACCENT }}
+                      className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white ${
+                        active ? "bg-violet-500" : "bg-zinc-600"
+                      }`}
                     >
                       {badge > 9 ? "9+" : badge}
                     </span>
                   )}
                 </span>
                 <span className="max-w-full truncate px-0.5 text-center">{label}</span>
-                <span
-                  className="mt-0.5 h-1 w-1 rounded-full transition-opacity"
-                  style={{ backgroundColor: ACCENT, opacity: active ? 1 : 0 }}
-                  aria-hidden
-                />
               </Link>
             </li>
           );

@@ -824,7 +824,7 @@ export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByComp
       <button
         type="button"
         onClick={openAdd}
-        className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-200 text-zinc-950 shadow-[0_4px_24px_rgba(45,212,191,0.22),0_8px_32px_rgba(0,0,0,0.45)] ring-2 ring-[#101014] transition hover:scale-105 hover:bg-white hover:shadow-[0_6px_28px_rgba(45,212,191,0.28)] active:scale-95 md:bottom-10 md:right-10"
+        className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-teal-300 to-teal-200 text-teal-950 shadow-[0_8px_32px_rgba(45,212,191,0.4),0_2px_8px_rgba(0,0,0,0.4)] ring-2 ring-[#101014] transition hover:scale-105 hover:from-teal-200 hover:to-teal-100 active:scale-95 md:bottom-10 md:right-10"
         aria-label="Add company"
       >
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>

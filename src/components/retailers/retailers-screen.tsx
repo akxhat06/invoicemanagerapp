@@ -779,7 +779,7 @@ export function RetailersScreen({
       <button
         type="button"
         onClick={openAdd}
-        className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-200 text-zinc-950 shadow-[0_4px_24px_rgba(167,139,250,0.22),0_8px_32px_rgba(0,0,0,0.45)] ring-2 ring-[#101014] transition hover:scale-105 hover:bg-white hover:shadow-[0_6px_28px_rgba(167,139,250,0.28)] active:scale-95 md:bottom-10 md:right-10"
+        className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-300 to-violet-200 text-violet-950 shadow-[0_8px_32px_rgba(167,139,250,0.42),0_2px_8px_rgba(0,0,0,0.4)] ring-2 ring-[#101014] transition hover:scale-105 hover:from-violet-200 hover:to-violet-100 active:scale-95 md:bottom-10 md:right-10"
         aria-label="Add retailer"
       >
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
