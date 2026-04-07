@@ -1,5 +1,6 @@
 "use client";
 
+import { clearAllWorkspaceUiSessions } from "@/lib/workspace-ui-session";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -58,6 +59,7 @@ export function DashboardProfileMenu({ displayName, avatarInitial, avatarUrl, me
 
   async function handleLogout() {
     setLoggingOut(true);
+    clearAllWorkspaceUiSessions();
     const supabase = createClient();
     await supabase.auth.signOut();
     setOpen(false);

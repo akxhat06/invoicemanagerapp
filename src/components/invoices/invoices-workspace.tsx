@@ -7,6 +7,7 @@ import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
 import type { RetailerInvoiceRow } from "@/types/invoice";
 import type { RetailerRow } from "@/types/retailer";
+import { useWorkspaceUiSession } from "@/hooks/use-workspace-ui-session";
 import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type TransitionEvent } from "react";
 
@@ -17,6 +18,23 @@ type Props = {
 };
 
 type PanelMode = "closed" | "add";
+
+type InvoicesUiSessionV1 = {
+  v: 1;
+  panel: PanelMode;
+  addStep: 1 | 2;
+  companyId: string;
+  retailerId: string;
+  billDate: string;
+  invoiceNumber: string;
+  quantity: string;
+  basicAmount: string;
+  gstAmount: string;
+  transportName: string;
+  lrNo: string;
+  lrDate: string;
+  transportAmount: string;
+};
 
 const CANVAS = "#101014";
 const INPUT_BG = "#1E1E24";
@@ -208,7 +226,7 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [basicAmount, setBasicAmount] = useState("");
-  const [gstPercent, setGstPercent] = useState("");
+  const [gstAmount, setGstAmount] = useState("");
   const [transportName, setTransportName] = useState("");
   const [lrNo, setLrNo] = useState("");
   const [lrDate, setLrDate] = useState(todayISODate());
@@ -230,12 +248,75 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
     setInvoiceNumber("");
     setQuantity("1");
     setBasicAmount("");
-    setGstPercent("");
+    setGstAmount("");
     setTransportName("");
     setLrNo("");
     setLrDate(todayISODate());
     setTransportAmount("");
   }, []);
+
+  const applyInvoicesUiSession = useCallback(
+    (s: InvoicesUiSessionV1) => {
+      if (s.panel === "closed") {
+        setPanel("closed");
+        resetForm();
+        setAddStep(1);
+        return;
+      }
+      setPanel("add");
+      setAddStep(s.addStep ?? 1);
+      setCompanyId(s.companyId ?? "");
+      setRetailerId(s.retailerId ?? "");
+      setBillDate(s.billDate || todayISODate());
+      setInvoiceNumber(s.invoiceNumber ?? "");
+      setQuantity(s.quantity ?? "1");
+      setBasicAmount(s.basicAmount ?? "");
+      setGstAmount(s.gstAmount ?? "");
+      setTransportName(s.transportName ?? "");
+      setLrNo(s.lrNo ?? "");
+      setLrDate(s.lrDate || todayISODate());
+      setTransportAmount(s.transportAmount ?? "");
+    },
+    [resetForm]
+  );
+
+  useWorkspaceUiSession<InvoicesUiSessionV1>({
+    route: "invoices",
+    version: 1,
+    restoreReady: true,
+    buildSnapshot: () => ({
+      v: 1,
+      panel,
+      addStep,
+      companyId,
+      retailerId,
+      billDate,
+      invoiceNumber,
+      quantity,
+      basicAmount,
+      gstAmount,
+      transportName,
+      lrNo,
+      lrDate,
+      transportAmount,
+    }),
+    applyRestore: applyInvoicesUiSession,
+    saveDeps: [
+      panel,
+      addStep,
+      companyId,
+      retailerId,
+      billDate,
+      invoiceNumber,
+      quantity,
+      basicAmount,
+      gstAmount,
+      transportName,
+      lrNo,
+      lrDate,
+      transportAmount,
+    ],
+  });
 
   const finalizeClose = useCallback(() => {
     setPanel("closed");
@@ -325,13 +406,13 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
       toastError("Enter base amount.");
       return false;
     }
-    const pct = toNum(gstPercent);
-    if (pct < 0 || pct > 100) {
-      toastError("GST % must be between 0 and 100.");
+    const gst = toNum(gstAmount);
+    if (gst < 0) {
+      toastError("GST amount cannot be negative.");
       return false;
     }
-    if (!gstPercent.trim() && !skipRequiredFieldValidation()) {
-      toastError("Enter GST % (use 0 if exempt).");
+    if (!gstAmount.trim() && !skipRequiredFieldValidation()) {
+      toastError("Enter GST amount (use 0 if exempt).");
       return false;
     }
     return true;
@@ -342,16 +423,6 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
     if (skipRequiredFieldValidation()) return true;
     if (toNum(transportAmount) < 0) {
       toastError("Transport amount cannot be negative.");
-      return false;
-    }
-    const tn = transportName.trim();
-    const ta = toNum(transportAmount);
-    if (ta > 0 && !tn) {
-      toastError("Enter transport name when amount is set.");
-      return false;
-    }
-    if (tn && ta <= 0 && !skipRequiredFieldValidation()) {
-      toastError("Enter transport amount when name is set.");
       return false;
     }
     return true;
@@ -371,18 +442,12 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
       return { error: null };
     }
 
-    if (!tName.trim()) {
-      return { error: new Error("Transport name is required when adding transport details.") };
-    }
-    if (transportAmt <= 0 && !skipRequiredFieldValidation()) {
-      return { error: new Error("Enter transport amount.") };
-    }
-    const amt = transportAmt > 0 ? transportAmt : skipRequiredFieldValidation() ? 0.01 : 0;
+    const amt = Math.max(0, transportAmt);
 
     const { error } = await supabase.from("invoice_transports").insert({
       user_id: userId,
       invoice_id: invoiceId,
-      transport_name: tName.trim(),
+      transport_name: tName || "Transport",
       lr_no: lrNo.trim() || null,
       lr_date: lrDate || null,
       amount: amt,
@@ -400,11 +465,10 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
   ) {
     const dev = skipRequiredFieldValidation();
     const basic = round2(toNum(basicAmount));
-    const pct = toNum(gstPercent);
-    const gstAmt = round2((basic * pct) / 100);
+    const gstAmt = round2(toNum(gstAmount));
     const invAmt = round2(basic + gstAmt);
     const transportAmt = round2(toNum(transportAmount));
-    const total = round2(invAmt + transportAmt);
+    const total = round2(invAmt);
     const paid = round2(paymentReceived);
     const outstanding = Math.max(0, round2(total - paid));
 
@@ -493,11 +557,7 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
     [invoices]
   );
 
-  const computedGstAmountPreview = useMemo(() => {
-    const basic = round2(toNum(basicAmount));
-    const pct = toNum(gstPercent);
-    return round2((basic * pct) / 100);
-  }, [basicAmount, gstPercent]);
+  const computedGstAmountPreview = useMemo(() => round2(toNum(gstAmount)), [gstAmount]);
 
   const computedInvoiceAmountPreview = useMemo(
     () => round2(toNum(basicAmount) + computedGstAmountPreview),
@@ -627,27 +687,19 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
       </div>
 
       <div>
-        <label className={labelDark} htmlFor="inv-gst-pct">
-          GST (%) <span className="text-red-400">*</span>
+        <label className={labelDark} htmlFor="inv-gst-amt">
+          GST amount <span className="text-red-400">*</span>
         </label>
         <input
-          id="inv-gst-pct"
+          id="inv-gst-amt"
           inputMode="decimal"
-          value={gstPercent}
-          onChange={(e) => setGstPercent(e.target.value)}
+          value={gstAmount}
+          onChange={(e) => setGstAmount(e.target.value)}
           disabled={saving}
           className={fieldClassDark()}
           style={inputStyle}
-          placeholder="e.g. 18"
+          placeholder="0.00"
         />
-        <p className="mt-1 text-[11px] text-zinc-500">GST amount = base × % ÷ 100.</p>
-      </div>
-
-      <div>
-        <label className={labelDark}>GST amount</label>
-        <div className={`${fieldClassDark()} text-zinc-300`} style={inputStyle} aria-live="polite">
-          {formatInr(computedGstAmountPreview)}
-        </div>
       </div>
 
       <div>
@@ -791,9 +843,6 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
                     aria-hidden
                   />
                   <div className="flex min-w-0 flex-1 items-center gap-3 py-4 pl-3 pr-4 sm:gap-4 sm:pl-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-zinc-700/50 bg-zinc-900/90 text-amber-400/90 shadow-inner">
-                      <InvoiceDocGlyph className="h-5 w-5" />
-                    </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-mono text-[15px] font-semibold tracking-tight text-white sm:text-base">
                         {inv.invoice_number}
@@ -811,6 +860,10 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
                         {formatInr(Number(inv.total_amount ?? 0))}
                       </span>
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Total</span>
+                      <span className="mt-0.5 font-mono text-[11px] font-medium tabular-nums text-sky-200/90">
+                        {formatInr(Number(inv.transportation_amount ?? 0))}
+                      </span>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Transport</span>
                     </div>
                   </div>
                 </div>

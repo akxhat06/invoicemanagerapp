@@ -18,6 +18,12 @@ function PersonIcon({ className }: { className?: string }) {
   );
 }
 
+function formatInr(n: number) {
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(
+    Number.isFinite(n) ? n : 0
+  );
+}
+
 function DocIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -31,6 +37,8 @@ export type DashboardHomeViewProps = {
   username: string | undefined;
   email: string;
   companyCount: number;
+  /** Sum of invoice total_amount (non-draft) across all companies. */
+  companiesTotalBilled: number;
   activeCompaniesCount: number;
   retailerCount: number;
   retailersNew30d: number;
@@ -43,6 +51,7 @@ export function DashboardHomeView({
   username,
   email,
   companyCount,
+  companiesTotalBilled,
   activeCompaniesCount,
   retailerCount,
   retailersNew30d,
@@ -59,89 +68,103 @@ export function DashboardHomeView({
         ? `${activeCompaniesCount} active`
         : "—";
 
-  const retailerBadge = retailersNew30d > 0 ? `+${retailersNew30d} new` : retailerCount > 0 ? "Profiles" : "—";
+  const retailerChip = retailerCount > 0 ? "Profiles" : "—";
 
   return (
     <div className="text-zinc-100">
-      <header className="mb-6 border-b border-zinc-800/80 pb-5">
-        <p className="text-xs text-zinc-500">Welcome back</p>
-        <p className="mt-1 text-lg font-bold tracking-tight text-white">{displayName}</p>
-        <h1 className="mt-4 font-login-serif text-xl font-semibold tracking-tight text-white sm:text-2xl">Dashboard</h1>
-        <p className="mt-2 max-w-md text-sm leading-relaxed text-zinc-500">
-          Tap a card to open that section. Counts include everything you have access to.
-        </p>
+      <header className="mb-5">
+        <p className="text-xs font-medium text-zinc-500">Welcome back</p>
+        <h1 className="mt-1 flex items-center gap-2 truncate font-login-serif text-2xl font-semibold tracking-tight text-white sm:text-[1.6rem]">
+          <span className="truncate">{displayName}</span>
+          <span className="inline-block origin-[70%_70%] animate-[dashboard-wave_1.8s_ease-in-out_infinite] text-xl leading-none" aria-hidden>
+            👋
+          </span>
+        </h1>
+        <p className="mt-1 max-w-sm text-sm text-zinc-500">Open a section below to work with your data.</p>
       </header>
 
-      <div className="mt-4 space-y-2">
-        {/* Companies + Retailers — top row */}
-        <div className="grid grid-cols-2 gap-2">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
           <Link
             href="/companies"
-            className="group flex flex-col rounded-xl border border-emerald-900/50 bg-gradient-to-br from-emerald-950/50 to-zinc-950/90 p-2.5 shadow-sm ring-1 ring-emerald-500/10 transition hover:border-emerald-500/35 hover:ring-emerald-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500/50"
+            className="group flex flex-col rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-3 shadow-sm ring-1 ring-white/[0.04] transition hover:border-emerald-500/30 hover:ring-emerald-500/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500/50"
           >
-            <div className="flex items-start justify-between gap-1.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-950/80 text-emerald-400 ring-1 ring-emerald-500/20">
-                <BuildingIcon className="h-4 w-4" />
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20">
+                <BuildingIcon className="h-[18px] w-[18px]" />
               </div>
-              <span className="max-w-[4.5rem] truncate rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-300">
+              <span className="max-w-[5rem] truncate rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300/95">
                 {companyBadge}
               </span>
             </div>
-            <p className="mt-2 text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">Companies</p>
-            <p className="mt-0.5 text-2xl font-bold tabular-nums leading-none text-white">{companyCount}</p>
+            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">Companies</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums leading-none tracking-tight text-white">{companyCount}</p>
+            <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2.5">
+              <span className="text-[11px] text-zinc-500">Total billed</span>
+              <span className="shrink-0 text-right text-[11px] font-semibold tabular-nums text-emerald-300/95">
+                {formatInr(companiesTotalBilled)}
+              </span>
+            </div>
           </Link>
 
           <Link
             href="/retailers"
-            className="group flex flex-col rounded-xl border border-violet-900/50 bg-gradient-to-br from-violet-950/45 to-zinc-950/90 p-2.5 shadow-sm ring-1 ring-violet-500/10 transition hover:border-violet-500/35 hover:ring-violet-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500/50"
+            className="group flex flex-col rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-3 shadow-sm ring-1 ring-white/[0.04] transition hover:border-violet-500/30 hover:ring-violet-500/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500/50"
           >
-            <div className="flex items-start justify-between gap-1.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-950/80 text-violet-300 ring-1 ring-violet-500/20">
-                <PersonIcon className="h-4 w-4" />
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300 ring-1 ring-violet-500/20">
+                <PersonIcon className="h-[18px] w-[18px]" />
               </div>
-              <span className="max-w-[4.5rem] truncate rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-200">
-                {retailerBadge}
+              <span className="max-w-[5rem] truncate rounded-md bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-200/95">
+                {retailerChip}
               </span>
             </div>
-            <p className="mt-2 text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">Retailers</p>
-            <p className="mt-0.5 text-2xl font-bold tabular-nums leading-none text-white">{retailerCount}</p>
+            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">Retailers</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums leading-none tracking-tight text-white">{retailerCount}</p>
+            <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2.5">
+              <span className="text-[11px] text-zinc-500">New (30 days)</span>
+              <span className="shrink-0 text-right text-[11px] font-semibold tabular-nums text-violet-200/95">
+                {retailersNew30d > 0 ? `+${retailersNew30d}` : "—"}
+              </span>
+            </div>
           </Link>
         </div>
 
-        {/* Invoices — full width */}
-        <div className="overflow-hidden rounded-xl border border-amber-500/25 bg-gradient-to-br from-amber-950/40 via-zinc-950/80 to-zinc-950 shadow-sm ring-1 ring-amber-500/15">
+        <div className="overflow-hidden rounded-2xl border border-zinc-800/80 bg-zinc-950/80 shadow-sm ring-1 ring-white/[0.04]">
           <Link
             href="/invoices"
-            className="block p-3 transition hover:bg-white/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-amber-500/50"
+            className="block p-3.5 transition hover:bg-white/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-amber-500/50"
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">Invoices</p>
-                <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-200/90">
-                  This month · {invoicesThisMonth}
-                </span>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">Invoices</p>
+                  <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200/95">
+                    This month · {invoicesThisMonth}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap items-end gap-2">
+                  <span className="text-3xl font-bold tabular-nums tracking-tight text-white">{invoiceCount}</span>
+                  {invoiceMonthTrendPct !== null && (
+                    <span className="mb-0.5 inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-400">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+                        <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      {invoiceMonthTrendPct >= 0 ? "+" : ""}
+                      {invoiceMonthTrendPct}%
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1.5 text-xs text-zinc-500">All recorded invoices</p>
               </div>
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/12 text-amber-300 ring-1 ring-amber-500/25">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-300 ring-1 ring-amber-500/20">
                 <DocIcon className="h-5 w-5" />
               </div>
             </div>
-            <div className="mt-2 flex flex-wrap items-end gap-1.5">
-              <span className="text-3xl font-bold tabular-nums tracking-tight text-white">{invoiceCount}</span>
-              {invoiceMonthTrendPct !== null && (
-                <span className="mb-1 inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-400">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
-                    <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  {invoiceMonthTrendPct >= 0 ? "+" : ""}
-                  {invoiceMonthTrendPct}%
-                </span>
-              )}
-            </div>
-            <p className="mt-1 text-xs text-zinc-500">All recorded invoices</p>
           </Link>
           <Link
             href="/invoices"
-            className="block border-t border-amber-500/15 bg-black/25 px-3 py-2.5 text-center text-xs font-bold text-white transition hover:bg-black/35"
+            className="block border-t border-white/[0.06] bg-black/20 px-3 py-2.5 text-center text-xs font-semibold text-white transition hover:bg-black/30"
           >
             + Add new invoice
           </Link>

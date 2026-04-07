@@ -7,6 +7,7 @@ import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
 import type { RetailerInvoiceRow } from "@/types/invoice";
 import type { RetailerRow } from "@/types/retailer";
+import { useWorkspaceUiSession } from "@/hooks/use-workspace-ui-session";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type TransitionEvent } from "react";
 
@@ -18,9 +19,26 @@ type Props = {
   initialTotalAmountByRetailer: Record<string, number>;
 };
 
+type PanelMode = "closed" | "add" | "view" | "edit";
+
 type RetailerViewTab = "profile" | "invoices";
 
-type PanelMode = "closed" | "add" | "view" | "edit";
+type RetailersUiSessionV1 = {
+  v: 1;
+  panel: PanelMode;
+  selectedId: string | null;
+  retailerViewTab: RetailerViewTab;
+  inlineInvoiceEditId: string | null;
+  draft: {
+    retailerName: string;
+    retailerAddress: string;
+    retailerContactPerson: string;
+    retailerTelephone: string;
+    retailerPhone: string;
+    retailerAltPhone: string;
+    retailerGst: string;
+  } | null;
+};
 
 const CANVAS = "#101014";
 const INPUT_BG = "#1E1E24";
@@ -155,6 +173,7 @@ export function RetailersScreen({
   const [deleteTarget, setDeleteTarget] = useState<RetailerRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [retailerViewTab, setRetailerViewTab] = useState<RetailerViewTab>("profile");
+  const pendingInlineInvoiceIdRef = useRef<string | null>(null);
   const [retailerInvoices, setRetailerInvoices] = useState<RetailerInvoiceRow[]>([]);
   const [retailerInvoicesLoading, setRetailerInvoicesLoading] = useState(false);
   const [inlineInvoiceEdit, setInlineInvoiceEdit] = useState<RetailerInvoiceRow | null>(null);
@@ -220,6 +239,19 @@ export function RetailersScreen({
     };
   }, [panel, selected?.id]);
 
+  useEffect(() => {
+    const pid = pendingInlineInvoiceIdRef.current;
+    if (!pid || panel !== "view" || !selected) return;
+    if (retailerInvoicesLoading) return;
+    const inv = retailerInvoices.find((i) => i.id === pid);
+    if (inv) {
+      setInlineInvoiceEdit(inv);
+      pendingInlineInvoiceIdRef.current = null;
+      return;
+    }
+    pendingInlineInvoiceIdRef.current = null;
+  }, [retailerInvoices, retailerInvoicesLoading, panel, selected?.id]);
+
   const resetForm = useCallback(() => {
     setRetailerName("");
     setRetailerAddress("");
@@ -239,6 +271,100 @@ export function RetailersScreen({
     setRetailerAltPhone(phoneDigitsFromStored(r.alternative_phone));
     setRetailerGst(r.gst_no ?? "");
   }, []);
+
+  const applyRetailersUiSession = useCallback(
+    (s: RetailersUiSessionV1) => {
+      pendingInlineInvoiceIdRef.current = null;
+      if (s.panel === "closed") {
+        setPanel("closed");
+        setSelected(null);
+        setInlineInvoiceEdit(null);
+        setRetailerViewTab("profile");
+        resetForm();
+        return;
+      }
+      setPanel(s.panel);
+      setRetailerViewTab(s.retailerViewTab ?? "profile");
+      if (s.selectedId) {
+        const r = retailers.find((x) => x.id === s.selectedId);
+        if (!r) {
+          setPanel("closed");
+          setSelected(null);
+          setInlineInvoiceEdit(null);
+          resetForm();
+          return;
+        }
+        setSelected(r);
+        if (s.draft && (s.panel === "add" || s.panel === "edit")) {
+          setRetailerName(s.draft.retailerName);
+          setRetailerAddress(s.draft.retailerAddress);
+          setRetailerContactPerson(s.draft.retailerContactPerson);
+          setRetailerTelephone(s.draft.retailerTelephone);
+          setRetailerPhone(s.draft.retailerPhone);
+          setRetailerAltPhone(s.draft.retailerAltPhone);
+          setRetailerGst(s.draft.retailerGst);
+        } else if (s.panel === "edit") {
+          hydrateFromRetailer(r);
+        }
+      } else if (s.panel === "add") {
+        setSelected(null);
+        if (s.draft) {
+          setRetailerName(s.draft.retailerName);
+          setRetailerAddress(s.draft.retailerAddress);
+          setRetailerContactPerson(s.draft.retailerContactPerson);
+          setRetailerTelephone(s.draft.retailerTelephone);
+          setRetailerPhone(s.draft.retailerPhone);
+          setRetailerAltPhone(s.draft.retailerAltPhone);
+          setRetailerGst(s.draft.retailerGst);
+        } else {
+          resetForm();
+        }
+      }
+      if (s.inlineInvoiceEditId) {
+        pendingInlineInvoiceIdRef.current = s.inlineInvoiceEditId;
+      }
+    },
+    [retailers, hydrateFromRetailer, resetForm]
+  );
+
+  useWorkspaceUiSession<RetailersUiSessionV1>({
+    route: "retailers",
+    version: 1,
+    restoreReady: true,
+    buildSnapshot: () => ({
+      v: 1,
+      panel,
+      selectedId: selected?.id ?? null,
+      retailerViewTab,
+      inlineInvoiceEditId: inlineInvoiceEdit?.id ?? null,
+      draft:
+        panel === "add" || panel === "edit"
+          ? {
+              retailerName,
+              retailerAddress,
+              retailerContactPerson,
+              retailerTelephone,
+              retailerPhone,
+              retailerAltPhone,
+              retailerGst,
+            }
+          : null,
+    }),
+    applyRestore: applyRetailersUiSession,
+    saveDeps: [
+      panel,
+      selected?.id,
+      retailerViewTab,
+      inlineInvoiceEdit?.id,
+      retailerName,
+      retailerAddress,
+      retailerContactPerson,
+      retailerTelephone,
+      retailerPhone,
+      retailerAltPhone,
+      retailerGst,
+    ],
+  });
 
   const finalizeClose = useCallback(() => {
     setPanel("closed");
@@ -1124,9 +1250,14 @@ export function RetailersScreen({
                                         <p className="mt-0.5 text-xs text-zinc-500">
                                           {(inv.bill_date ?? "").slice(0, 10)}
                                         </p>
-                                        <p className="mt-1.5 font-mono text-sm font-medium tabular-nums text-teal-200">
-                                          {formatInr(Number(inv.total_amount ?? 0))}
-                                        </p>
+                                        <div className="mt-1.5 space-y-0.5">
+                                          <p className="font-mono text-sm font-medium tabular-nums text-teal-200">
+                                            Total: {formatInr(Number(inv.total_amount ?? 0))}
+                                          </p>
+                                          <p className="font-mono text-xs font-medium tabular-nums text-sky-200/90">
+                                            Transport: {formatInr(Number(inv.transportation_amount ?? 0))}
+                                          </p>
+                                        </div>
                                       </div>
                                       <div className="flex w-full shrink-0 gap-2 sm:w-auto">
                                         <button

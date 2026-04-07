@@ -7,6 +7,7 @@ import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
 import type { RetailerInvoiceRow } from "@/types/invoice";
+import { useWorkspaceUiSession } from "@/hooks/use-workspace-ui-session";
 import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
@@ -14,11 +15,38 @@ type Props = {
   initialCompanies: CompanyRow[];
   /** Invoices per company id (from server aggregate). */
   initialInvoiceCountByCompany?: Record<string, number>;
+  /** Sum of invoice total_amount per company id (from server aggregate). */
+  initialTotalAmountByCompany?: Record<string, number>;
 };
 
 type PanelMode = "closed" | "add" | "view" | "edit";
 
 type CompanyViewTab = "profile" | "invoices";
+
+type CompaniesUiSessionV1 = {
+  v: 1;
+  panel: PanelMode;
+  selectedId: string | null;
+  companyViewTab: CompanyViewTab;
+  addStep: 1 | 2 | 3;
+  inlineInvoiceEditId: string | null;
+  draft: {
+    name: string;
+    address: string;
+    contactDigits: string;
+    email: string;
+    city: string;
+    stateVal: string;
+    pinCode: string;
+    telephone: string;
+    alternativeDigits: string;
+    gstNo: string;
+    bankName: string;
+    bankAccountNumber: string;
+    bankIfsc: string;
+    bankBranch: string;
+  } | null;
+};
 
 /** Charcoal surface — slightly lifted from pure black */
 const CANVAS = "#101014";
@@ -253,7 +281,11 @@ function ViewSubsectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
-export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByCompany = {} }: Props) {
+export function CompaniesWorkspace({
+  initialCompanies,
+  initialInvoiceCountByCompany = {},
+  initialTotalAmountByCompany = {},
+}: Props) {
   const router = useRouter();
   const [companies, setCompanies] = useState<CompanyRow[]>(initialCompanies);
   const [panel, setPanel] = useState<PanelMode>("closed");
@@ -274,7 +306,9 @@ export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByComp
   /** When set, company sheet shows inline invoice editor instead of the invoice list. */
   const [inlineInvoiceEdit, setInlineInvoiceEdit] = useState<RetailerInvoiceRow | null>(null);
   const [invoiceCountByCompany, setInvoiceCountByCompany] = useState<Record<string, number>>(initialInvoiceCountByCompany);
+  const [totalAmountByCompany, setTotalAmountByCompany] = useState<Record<string, number>>(initialTotalAmountByCompany);
   const [companyViewTab, setCompanyViewTab] = useState<CompanyViewTab>("profile");
+  const pendingInlineInvoiceIdRef = useRef<string | null>(null);
 
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
@@ -298,6 +332,10 @@ export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByComp
   useEffect(() => {
     setInvoiceCountByCompany(initialInvoiceCountByCompany);
   }, [initialInvoiceCountByCompany]);
+
+  useEffect(() => {
+    setTotalAmountByCompany(initialTotalAmountByCompany);
+  }, [initialTotalAmountByCompany]);
 
   const totalInvoicesAcrossCompanies = useMemo(
     () => companies.reduce((sum, c) => sum + (invoiceCountByCompany[c.id] ?? 0), 0),
@@ -333,6 +371,19 @@ export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByComp
     };
   }, [panel, selected?.id]);
 
+  useEffect(() => {
+    const pid = pendingInlineInvoiceIdRef.current;
+    if (!pid || panel !== "view" || !selected) return;
+    if (companyInvoicesLoading) return;
+    const inv = companyInvoices.find((i) => i.id === pid);
+    if (inv) {
+      setInlineInvoiceEdit(inv);
+      pendingInlineInvoiceIdRef.current = null;
+      return;
+    }
+    pendingInlineInvoiceIdRef.current = null;
+  }, [companyInvoices, companyInvoicesLoading, panel, selected?.id]);
+
   const resetForm = useCallback(() => {
     setName("");
     setAddress("");
@@ -366,6 +417,132 @@ export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByComp
     setBankIfsc(c.bank_ifsc ?? "");
     setBankBranch(c.bank_branch ?? "");
   }, []);
+
+  const applyCompaniesUiSession = useCallback(
+    (s: CompaniesUiSessionV1) => {
+      pendingInlineInvoiceIdRef.current = null;
+      if (s.panel === "closed") {
+        setPanel("closed");
+        setSelected(null);
+        setInlineInvoiceEdit(null);
+        setCompanyViewTab("profile");
+        setAddStep(1);
+        resetForm();
+        return;
+      }
+      setPanel(s.panel);
+      setCompanyViewTab(s.companyViewTab ?? "profile");
+      setAddStep(s.addStep ?? 1);
+      if (s.selectedId) {
+        const c = companies.find((x) => x.id === s.selectedId);
+        if (!c) {
+          setPanel("closed");
+          setSelected(null);
+          setInlineInvoiceEdit(null);
+          resetForm();
+          return;
+        }
+        setSelected(c);
+        if (s.draft && (s.panel === "add" || s.panel === "edit")) {
+          setName(s.draft.name);
+          setAddress(s.draft.address);
+          setContactDigits(s.draft.contactDigits);
+          setEmail(s.draft.email);
+          setCity(s.draft.city);
+          setStateVal(s.draft.stateVal);
+          setPinCode(s.draft.pinCode);
+          setTelephone(s.draft.telephone);
+          setAlternativeDigits(s.draft.alternativeDigits);
+          setGstNo(s.draft.gstNo);
+          setBankName(s.draft.bankName);
+          setBankAccountNumber(s.draft.bankAccountNumber);
+          setBankIfsc(s.draft.bankIfsc);
+          setBankBranch(s.draft.bankBranch);
+        } else if (s.panel === "edit") {
+          hydrateFromCompany(c);
+        }
+      } else if (s.panel === "add") {
+        setSelected(null);
+        if (s.draft) {
+          setName(s.draft.name);
+          setAddress(s.draft.address);
+          setContactDigits(s.draft.contactDigits);
+          setEmail(s.draft.email);
+          setCity(s.draft.city);
+          setStateVal(s.draft.stateVal);
+          setPinCode(s.draft.pinCode);
+          setTelephone(s.draft.telephone);
+          setAlternativeDigits(s.draft.alternativeDigits);
+          setGstNo(s.draft.gstNo);
+          setBankName(s.draft.bankName);
+          setBankAccountNumber(s.draft.bankAccountNumber);
+          setBankIfsc(s.draft.bankIfsc);
+          setBankBranch(s.draft.bankBranch);
+        } else {
+          resetForm();
+        }
+      }
+      if (s.inlineInvoiceEditId) {
+        pendingInlineInvoiceIdRef.current = s.inlineInvoiceEditId;
+      }
+    },
+    [companies, hydrateFromCompany, resetForm]
+  );
+
+  useWorkspaceUiSession<CompaniesUiSessionV1>({
+    route: "companies",
+    version: 1,
+    restoreReady: true,
+    buildSnapshot: () => ({
+      v: 1,
+      panel,
+      selectedId: selected?.id ?? null,
+      companyViewTab,
+      addStep,
+      inlineInvoiceEditId: inlineInvoiceEdit?.id ?? null,
+      draft:
+        panel === "add" || panel === "edit"
+          ? {
+              name,
+              address,
+              contactDigits,
+              email,
+              city,
+              stateVal,
+              pinCode,
+              telephone,
+              alternativeDigits,
+              gstNo,
+              bankName,
+              bankAccountNumber,
+              bankIfsc,
+              bankBranch,
+            }
+          : null,
+    }),
+    applyRestore: applyCompaniesUiSession,
+    saveDeps: [
+      panel,
+      selected?.id,
+      companyViewTab,
+      addStep,
+      inlineInvoiceEdit?.id,
+      name,
+      address,
+      contactDigits,
+      email,
+      city,
+      stateVal,
+      pinCode,
+      telephone,
+      alternativeDigits,
+      gstNo,
+      bankName,
+      bankAccountNumber,
+      bankIfsc,
+      bankBranch,
+    ],
+  });
 
   const finalizeClose = useCallback(() => {
     setPanel("closed");
@@ -649,6 +826,12 @@ export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByComp
         ...prev,
         [selected.id]: Math.max(0, (prev[selected.id] ?? prevLen) - 1),
       }));
+      setTotalAmountByCompany((prev) => {
+        const next = { ...prev };
+        const removed = Number(invoiceDeleteTarget.total_amount ?? 0);
+        next[selected.id] = Math.max(0, (next[selected.id] ?? 0) - (Number.isFinite(removed) ? removed : 0));
+        return next;
+      });
     }
     toastSuccess("Invoice deleted.");
     setInvoiceDeleteTarget(null);
@@ -667,6 +850,11 @@ export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByComp
     }
     setCompanies((prev) => prev.filter((c) => c.id !== deleteTarget.id));
     setInvoiceCountByCompany((prev) => {
+      const next = { ...prev };
+      delete next[deleteTarget.id];
+      return next;
+    });
+    setTotalAmountByCompany((prev) => {
       const next = { ...prev };
       delete next[deleteTarget.id];
       return next;
@@ -765,6 +953,7 @@ export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByComp
             const phoneDigits = phoneDigitsFromStored(c.phone_no);
             const phoneLabel = phoneDigits ? `+91 ${phoneDigits}` : "—";
             const invCount = invoiceCountByCompany[c.id] ?? 0;
+            const totalAmount = totalAmountByCompany[c.id] ?? 0;
             const gstShort = c.gst_no?.trim() ? `${c.gst_no.slice(0, 2)}···${c.gst_no.slice(-4)}` : null;
 
             return (
@@ -805,6 +994,22 @@ export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByComp
                         <InvoiceDocIcon className="h-3.5 w-3.5 text-cyan-400" />
                         <span className="tabular-nums">{invCount}</span>
                         <span className="hidden text-zinc-500 sm:inline">inv.</span>
+                      </div>
+                      <div
+                        className="flex items-center gap-1.5 rounded-full border border-emerald-800/60 bg-emerald-950/60 px-2.5 py-1 text-xs font-medium text-emerald-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                        title={`Total amount ${formatInr(totalAmount)}`}
+                      >
+                        <svg
+                          className="h-3.5 w-3.5 text-emerald-300"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          aria-hidden
+                        >
+                          <path d="M6 5h10M6 9h10M8 13h6l-6 6h10" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <span className="tabular-nums">{formatInr(totalAmount)}</span>
                       </div>
                       <span className="text-zinc-600 transition group-hover:text-zinc-400" aria-hidden>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1112,6 +1317,16 @@ export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByComp
                               companies={companies}
                               onSaved={(row) => {
                                 setCompanyInvoices((prev) => prev.map((x) => (x.id === row.id ? row : x)));
+                                const companyId = row.company_id;
+                                if (companyId) {
+                                  setTotalAmountByCompany((prev) => {
+                                    const existing = companyInvoices.find((x) => x.id === row.id);
+                                    const prevTotal = Number(existing?.total_amount ?? 0);
+                                    const nextTotal = Number(row.total_amount ?? 0);
+                                    const delta = (Number.isFinite(nextTotal) ? nextTotal : 0) - (Number.isFinite(prevTotal) ? prevTotal : 0);
+                                    return { ...prev, [companyId]: (prev[companyId] ?? 0) + delta };
+                                  });
+                                }
                                 setInlineInvoiceEdit(null);
                                 router.refresh();
                               }}
@@ -1156,9 +1371,14 @@ export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByComp
                                         <span className="text-zinc-600"> · </span>
                                         {inv.retailer_name?.trim() || "—"}
                                       </p>
-                                      <p className="mt-1.5 font-mono text-sm font-medium tabular-nums text-teal-200">
-                                        {formatInr(Number(inv.total_amount ?? 0))}
-                                      </p>
+                                      <div className="mt-1.5 space-y-0.5">
+                                        <p className="font-mono text-sm font-medium tabular-nums text-teal-200">
+                                          Total: {formatInr(Number(inv.total_amount ?? 0))}
+                                        </p>
+                                        <p className="font-mono text-xs font-medium tabular-nums text-sky-200/90">
+                                          Transport: {formatInr(Number(inv.transportation_amount ?? 0))}
+                                        </p>
+                                      </div>
                                     </div>
                                     <div className="flex w-full shrink-0 gap-2 sm:w-auto">
                                       <button
