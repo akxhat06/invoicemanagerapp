@@ -108,7 +108,7 @@ export function AuthLoginShell({ children, flow = "signin", formVerticalAlign = 
         <div
           className={`flex min-h-0 flex-1 flex-col px-4 pb-3 pt-4 sm:px-6 sm:pb-6 sm:pt-6 md:px-10 md:pb-4 md:pt-5 lg:px-12 lg:pb-5 lg:pt-6 ${formVerticalAlign === "start" ? "justify-start" : "justify-center"}`}
         >
-          <div className="login-split-form-inner mx-auto w-full max-w-[420px] pt-10 sm:pt-8 md:pt-0">
+          <div className="login-split-form-inner mx-auto w-full max-w-[420px] rounded-2xl border border-white/[0.08] bg-[#111217]/85 px-5 py-6 shadow-[0_20px_60px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.03] backdrop-blur-sm sm:pt-8 md:pt-6">
             <AuthViewTransition>{children}</AuthViewTransition>
           </div>
         </div>

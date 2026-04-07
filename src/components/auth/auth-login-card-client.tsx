@@ -24,6 +24,10 @@ export function AuthLoginCardClient({ mode }: Props) {
 
   return (
     <>
+      <p className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />
+        Secure access
+      </p>
       <h2 className="login-split-form-title font-login-serif text-left text-2xl font-semibold tracking-tight sm:text-3xl">
         {isSignIn ? "Welcome back" : "Create your account"}
       </h2>

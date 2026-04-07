@@ -55,14 +55,6 @@ function parseQuantityInput(s: string): number {
   return Math.min(n, 999_999);
 }
 
-function roundOffAmountInput(s: string): string {
-  const raw = String(s).replace(/,/g, "").trim();
-  if (!raw) return "";
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return s;
-  return String(Math.round(n));
-}
-
 function formatInr(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(
     Number.isFinite(n) ? n : 0
@@ -261,7 +253,7 @@ export function InvoiceEditForm({
     const dev = skipRequiredFieldValidation();
     const basic = round2(toNum(basicAmount));
     const gstAmt = round2(toNum(gstAmount));
-    const invAmt = round2(basic + gstAmt);
+    const invAmt = Math.round(round2(basic + gstAmt));
     const transportAmt = round2(toNum(transportAmount));
     const total = round2(invAmt);
     const paid = round2(paymentReceived);
@@ -355,7 +347,7 @@ export function InvoiceEditForm({
   const computedGstAmountPreview = useMemo(() => round2(toNum(gstAmount)), [gstAmount]);
 
   const computedInvoiceAmountPreview = useMemo(
-    () => round2(toNum(basicAmount) + computedGstAmountPreview),
+    () => Math.round(round2(toNum(basicAmount) + computedGstAmountPreview)),
     [basicAmount, computedGstAmountPreview]
   );
 
@@ -522,52 +514,32 @@ export function InvoiceEditForm({
             <label className={labelDark} htmlFor="inv-edit-basic">
               Base amount <span className="text-red-400">*</span>
             </label>
-            <div className="flex items-center gap-2">
-              <input
-                id="inv-edit-basic"
-                inputMode="decimal"
-                value={basicAmount}
-                onChange={(e) => setBasicAmount(e.target.value)}
-                disabled={saving}
-                className={`${fieldClassDark()} flex-1`}
-                style={inputStyle}
-                placeholder="0.00"
-              />
-              <button
-                type="button"
-                onClick={() => setBasicAmount(roundOffAmountInput(basicAmount))}
-                disabled={saving || !basicAmount.trim()}
-                className="shrink-0 rounded-lg border border-zinc-700/70 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Round off
-              </button>
-            </div>
+            <input
+              id="inv-edit-basic"
+              inputMode="decimal"
+              value={basicAmount}
+              onChange={(e) => setBasicAmount(e.target.value)}
+              disabled={saving}
+              className={fieldClassDark()}
+              style={inputStyle}
+              placeholder="0.00"
+            />
           </div>
 
           <div>
             <label className={labelDark} htmlFor="inv-edit-gst-amt">
               GST amount <span className="text-red-400">*</span>
             </label>
-            <div className="flex items-center gap-2">
-              <input
-                id="inv-edit-gst-amt"
-                inputMode="decimal"
-                value={gstAmount}
-                onChange={(e) => setGstAmount(e.target.value)}
-                disabled={saving}
-                className={`${fieldClassDark()} flex-1`}
-                style={inputStyle}
-                placeholder="0.00"
-              />
-              <button
-                type="button"
-                onClick={() => setGstAmount(roundOffAmountInput(gstAmount))}
-                disabled={saving || !gstAmount.trim()}
-                className="shrink-0 rounded-lg border border-zinc-700/70 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Round off
-              </button>
-            </div>
+            <input
+              id="inv-edit-gst-amt"
+              inputMode="decimal"
+              value={gstAmount}
+              onChange={(e) => setGstAmount(e.target.value)}
+              disabled={saving}
+              className={fieldClassDark()}
+              style={inputStyle}
+              placeholder="0.00"
+            />
           </div>
 
           <div className="rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-950/35 via-zinc-950/50 to-zinc-950 p-4 ring-1 ring-amber-500/10">
@@ -661,26 +633,16 @@ export function InvoiceEditForm({
                 <label className={labelDark} htmlFor="inv-edit-tr-amt">
                   Amount
                 </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="inv-edit-tr-amt"
-                    inputMode="decimal"
-                    value={transportAmount}
-                    onChange={(e) => setTransportAmount(e.target.value)}
-                    disabled={saving}
-                    className={`${fieldClassDark()} flex-1`}
-                    style={inputStyle}
-                    placeholder="0.00"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setTransportAmount(roundOffAmountInput(transportAmount))}
-                    disabled={saving || !transportAmount.trim()}
-                    className="shrink-0 rounded-lg border border-zinc-700/70 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Round off
-                  </button>
-                </div>
+                <input
+                  id="inv-edit-tr-amt"
+                  inputMode="decimal"
+                  value={transportAmount}
+                  onChange={(e) => setTransportAmount(e.target.value)}
+                  disabled={saving}
+                  className={fieldClassDark()}
+                  style={inputStyle}
+                  placeholder="0.00"
+                />
               </div>
             </div>
           </div>

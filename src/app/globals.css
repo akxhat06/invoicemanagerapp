@@ -174,8 +174,10 @@ body {
 
 /* Split form primary actions — neutral graphite */
 .login-split-main .auth-login-cta {
-  background: linear-gradient(180deg, #4b4b52, #36363c);
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(180deg, #5a5a63, #3d3d45);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 /* ─── Split login (dark grid + form column) ─── */
@@ -289,9 +291,9 @@ body {
 .login-split-main input[type="text"],
 .login-split-main input[type="email"],
 .login-split-main input[type="password"] {
-  background-color: #16161a;
+  background-color: #17181d;
   color: #fafafa;
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .login-split-main input::placeholder {

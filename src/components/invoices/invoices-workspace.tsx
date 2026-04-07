@@ -72,14 +72,6 @@ function parseQuantityInput(s: string): number {
   return Math.min(n, 999_999);
 }
 
-function roundOffAmountInput(s: string): string {
-  const raw = String(s).replace(/,/g, "").trim();
-  if (!raw) return "";
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return s;
-  return String(Math.round(n));
-}
-
 function InvoiceDocGlyph({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -90,7 +82,7 @@ function InvoiceDocGlyph({ className }: { className?: string }) {
 }
 
 function formatInr(n: number) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(
     Number.isFinite(n) ? n : 0
   );
 }
@@ -474,7 +466,7 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
     const dev = skipRequiredFieldValidation();
     const basic = round2(toNum(basicAmount));
     const gstAmt = round2(toNum(gstAmount));
-    const invAmt = round2(basic + gstAmt);
+    const invAmt = Math.round(round2(basic + gstAmt));
     const transportAmt = round2(toNum(transportAmount));
     const total = round2(invAmt);
     const paid = round2(paymentReceived);
@@ -580,7 +572,7 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
   const computedGstAmountPreview = useMemo(() => round2(toNum(gstAmount)), [gstAmount]);
 
   const computedInvoiceAmountPreview = useMemo(
-    () => round2(toNum(basicAmount) + computedGstAmountPreview),
+    () => Math.round(round2(toNum(basicAmount) + computedGstAmountPreview)),
     [basicAmount, computedGstAmountPreview]
   );
 
@@ -694,52 +686,32 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
         <label className={labelDark} htmlFor="inv-basic">
           Base amount <span className="text-red-400">*</span>
         </label>
-        <div className="flex items-center gap-2">
-          <input
-            id="inv-basic"
-            inputMode="decimal"
-            value={basicAmount}
-            onChange={(e) => setBasicAmount(e.target.value)}
-            disabled={saving}
-            className={`${fieldClassDark()} flex-1`}
-            style={inputStyle}
-            placeholder="0.00"
-          />
-          <button
-            type="button"
-            onClick={() => setBasicAmount(roundOffAmountInput(basicAmount))}
-            disabled={saving || !basicAmount.trim()}
-            className="shrink-0 rounded-lg border border-zinc-700/70 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Round off
-          </button>
-        </div>
+        <input
+          id="inv-basic"
+          inputMode="decimal"
+          value={basicAmount}
+          onChange={(e) => setBasicAmount(e.target.value)}
+          disabled={saving}
+          className={fieldClassDark()}
+          style={inputStyle}
+          placeholder="0.00"
+        />
       </div>
 
       <div>
         <label className={labelDark} htmlFor="inv-gst-amt">
           GST amount <span className="text-red-400">*</span>
         </label>
-        <div className="flex items-center gap-2">
-          <input
-            id="inv-gst-amt"
-            inputMode="decimal"
-            value={gstAmount}
-            onChange={(e) => setGstAmount(e.target.value)}
-            disabled={saving}
-            className={`${fieldClassDark()} flex-1`}
-            style={inputStyle}
-            placeholder="0.00"
-          />
-          <button
-            type="button"
-            onClick={() => setGstAmount(roundOffAmountInput(gstAmount))}
-            disabled={saving || !gstAmount.trim()}
-            className="shrink-0 rounded-lg border border-zinc-700/70 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Round off
-          </button>
-        </div>
+        <input
+          id="inv-gst-amt"
+          inputMode="decimal"
+          value={gstAmount}
+          onChange={(e) => setGstAmount(e.target.value)}
+          disabled={saving}
+          className={fieldClassDark()}
+          style={inputStyle}
+          placeholder="0.00"
+        />
       </div>
 
       <div>
@@ -810,26 +782,16 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
             <label className={labelDark} htmlFor="inv-tr-amt">
               Amount
             </label>
-            <div className="flex items-center gap-2">
-              <input
-                id="inv-tr-amt"
-                inputMode="decimal"
-                value={transportAmount}
-                onChange={(e) => setTransportAmount(e.target.value)}
-                disabled={saving}
-                className={`${fieldClassDark()} flex-1`}
-                style={inputStyle}
-                placeholder="0.00"
-              />
-              <button
-                type="button"
-                onClick={() => setTransportAmount(roundOffAmountInput(transportAmount))}
-                disabled={saving || !transportAmount.trim()}
-                className="shrink-0 rounded-lg border border-zinc-700/70 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Round off
-              </button>
-            </div>
+            <input
+              id="inv-tr-amt"
+              inputMode="decimal"
+              value={transportAmount}
+              onChange={(e) => setTransportAmount(e.target.value)}
+              disabled={saving}
+              className={fieldClassDark()}
+              style={inputStyle}
+              placeholder="0.00"
+            />
           </div>
         </div>
       </div>
