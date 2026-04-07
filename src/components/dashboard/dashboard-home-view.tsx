@@ -102,7 +102,7 @@ export function DashboardHomeView({
             <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2.5">
               <span className="text-[11px] text-zinc-500">Total billed</span>
               <span className="shrink-0 text-right text-[11px] font-semibold tabular-nums text-emerald-300/95">
-                {formatInr(companiesTotalBilled)}
+                {formatInr(Math.round(companiesTotalBilled))}
               </span>
             </div>
           </Link>
