@@ -557,20 +557,20 @@ export function CompaniesScreen({ initialCompanies }: Props) {
       <section>
         <div className="mb-4 flex items-center gap-2.5">
           <div className="bg-accent h-5 w-1 shrink-0 rounded-full" />
-          <h2 className="text-base font-bold tracking-tight text-zinc-900 dark:text-white">Companies</h2>
+          <h2 className="text-base font-bold tracking-tight text-white">Companies</h2>
         </div>
         <p className="text-muted-foreground mb-4 text-sm">
           Manage company profiles and bank details from one place.
         </p>
 
         {companies.length === 0 ? (
-          <div className="flex flex-col items-center rounded-2xl border border-dashed border-zinc-300 bg-white/80 px-5 py-10 text-center dark:border-zinc-600/80 dark:bg-card/80">
+          <div className="flex flex-col items-center rounded-2xl border border-dashed border-zinc-600/80 bg-card/80 px-5 py-10 text-center">
             <div className="bg-accent text-accent-foreground mb-3 flex h-12 w-12 items-center justify-center rounded-full" aria-hidden>
               <PlusIcon className="h-6 w-6" />
             </div>
-            <p className="font-semibold text-zinc-900 dark:text-white">No companies yet</p>
-            <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
-              Tap the <span className="font-medium text-zinc-700 dark:text-zinc-300">+</span> button below
+            <p className="font-semibold text-white">No companies yet</p>
+            <p className="mt-1 max-w-xs text-sm text-zinc-400">
+              Tap the <span className="font-medium text-zinc-300">+</span> button below
               to add your first company.
             </p>
           </div>
@@ -588,33 +588,33 @@ export function CompaniesScreen({ initialCompanies }: Props) {
                 >
                   <Link
                     href={`/companies/${c.id}`}
-                    className={`block min-w-0 flex-1 p-4 transition hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 ${
+                    className={`block min-w-0 flex-1 p-4 transition hover:bg-zinc-800/60 ${
                       isDeleting ? "pointer-events-none opacity-60" : ""
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <h3 className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-zinc-900 dark:text-white">
+                      <h3 className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-white">
                         {c.name}
                       </h3>
                       <div className="flex shrink-0 items-center gap-1.5">
                         {c.is_draft === true ? <DraftBadge /> : null}
-                        <ChevronRightIcon className="text-zinc-400 dark:text-zinc-500" />
+                        <ChevronRightIcon className="text-zinc-500" />
                       </div>
                     </div>
-                    <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">{gstDisplayLine(c)}</p>
-                    <div className="my-3 border-t border-zinc-200 dark:border-zinc-600/60" />
+                    <p className="mt-1.5 text-sm text-zinc-400">{gstDisplayLine(c)}</p>
+                    <div className="my-3 border-t border-zinc-600/60" />
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
                           Phone
                         </p>
-                        <p className="mt-1 text-sm text-zinc-900 dark:text-white">{phoneDisplay}</p>
+                        <p className="mt-1 text-sm text-white">{phoneDisplay}</p>
                       </div>
                       <div className="min-w-0">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
                           Bank
                         </p>
-                        <p className="mt-1 truncate text-sm text-zinc-900 dark:text-white" title={bankLine}>
+                        <p className="mt-1 truncate text-sm text-white" title={bankLine}>
                           {bankLine}
                         </p>
                       </div>

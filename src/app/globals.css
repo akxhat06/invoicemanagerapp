@@ -3,57 +3,8 @@
 /* Dark mode variant: `dark` class is always on <html>. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ─── App-wide semantic tokens (light) ─── */
+/* ─── App-wide semantic tokens (dark — default everywhere) ─── */
 :root {
-  --background: #f4f4f5;
-  --foreground: #18181b;
-  --card: #ffffff;
-  --card-foreground: #18181b;
-  --border: #e4e4e7;
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
-  /* Mustard brand + warm gold CTAs */
-  --accent: #e0c068;
-  --accent-foreground: #1e1e2d;
-  --accent-secondary: #d9a35d;
-  --accent-secondary-foreground: #1a1410;
-  --surface-brand: #1e1e2d;
-  /* Navy primary (auth / solid buttons) */
-  --primary: #0f2847;
-  --primary-hover: #0c2038;
-  --primary-foreground: #ffffff;
-  --header: rgba(255, 255, 255, 0.95);
-  --header-border: rgba(228, 228, 231, 0.8);
-  /* Add-company slide-over */
-  --panel: #ffffff;
-  --panel-field: #f4f4f5;
-  --panel-foreground: #18181b;
-  --panel-muted: #71717a;
-  /* Auth screens */
-  --auth-canvas: #f4f4f5;
-  --auth-hero: #0c1424;
-  --auth-hero-deep: #070b14;
-  --auth-hero-glow: rgba(30, 58, 95, 0.4);
-  --auth-hero-glow-mid: rgba(15, 40, 71, 0.6);
-  --auth-card: #ffffff;
-  --auth-card-border: rgba(228, 228, 231, 0.9);
-  --auth-card-shadow: rgba(15, 40, 71, 0.25);
-  --auth-input: #1a2235;
-  --auth-link: #c9a66b;
-  /* Auth primary CTA — logo cyan / teal (logo3.svg #0891b2) */
-  --auth-cta-from: #0891b2;
-  --auth-cta-to: #0d9488;
-  --auth-cta-glow: rgba(8, 145, 178, 0.38);
-  --auth-logo-start: #e8c87a;
-  --auth-logo-mid: #c9a66b;
-  --auth-logo-end: #9a7342;
-  --auth-login-hero-text: #ffffff;
-  --auth-login-hero-muted: rgba(255, 255, 255, 0.8);
-  --auth-login-ring: rgba(201, 166, 107, 0.35);
-}
-
-/* ─── Dark: default app shell (forced via `dark` on <html>) — near-black ─── */
-.dark {
   --background: #09090b;
   --foreground: #fafafa;
   --card: #141417;
@@ -94,6 +45,11 @@
   --auth-login-hero-text: #ffffff;
   --auth-login-hero-muted: rgba(255, 255, 255, 0.8);
   --auth-login-ring: rgba(201, 166, 107, 0.42);
+  color-scheme: dark;
+}
+
+html {
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -131,6 +87,8 @@
 
 body {
   font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
 }
 
 /* ─── Authenticated app shell (sidebar + main canvas) ─── */
@@ -140,12 +98,6 @@ body {
 }
 
 .dashboard-app-main {
-  background-color: #f3eaf4;
-  color: #18181b;
-  color-scheme: light;
-}
-
-.dark .dashboard-app-main {
   background-color: #09090b;
   color: #fafafa;
   color-scheme: dark;
@@ -210,12 +162,6 @@ body {
 }
 
 .auth-login-alert-error {
-  border-color: rgba(239, 68, 68, 0.35);
-  background: rgba(254, 242, 242, 0.95);
-  color: rgb(127, 29, 29);
-}
-
-.dark .auth-login-alert-error {
   border-color: rgba(248, 113, 113, 0.25);
   background: rgba(69, 10, 10, 0.45);
   color: rgb(254, 202, 202);
@@ -228,16 +174,11 @@ body {
 
 /* Split form primary actions — neutral graphite */
 .login-split-main .auth-login-cta {
-  background: linear-gradient(180deg, #4a4a50, #35353a);
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
-}
-
-.dark .login-split-main .auth-login-cta {
   background: linear-gradient(180deg, #4b4b52, #36363c);
   box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
 }
 
-/* ─── Split login (dark grid + gold accents + cream form) ─── */
+/* ─── Split login (dark grid + form column) ─── */
 .login-split-root {
   contain: layout style;
 }
@@ -264,12 +205,8 @@ body {
 
 /* Split login: brand column + dark form column */
 .login-split-brand {
-  background: linear-gradient(165deg, #151518 0%, #101012 50%, #0c0c0e 100%);
-  isolation: isolate;
-}
-
-.dark .login-split-brand {
   background: linear-gradient(165deg, #18181b 0%, #121214 50%, #0e0e10 100%);
+  isolation: isolate;
 }
 
 .login-split-brand::before {
@@ -283,12 +220,8 @@ body {
   background-size: 40px 40px;
   background-position: -1px -1px;
   mask-image: radial-gradient(ellipse 85% 70% at 50% 40%, black 20%, transparent 100%);
-  opacity: 0.55;
-  pointer-events: none;
-}
-
-.dark .login-split-brand::before {
   opacity: 0.45;
+  pointer-events: none;
 }
 
 .login-split-brand::after {
@@ -296,39 +229,21 @@ body {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: radial-gradient(ellipse 80% 60% at 10% 0%, rgba(255, 255, 255, 0.14), transparent 55%);
+  background: radial-gradient(ellipse 80% 60% at 10% 0%, rgba(255, 255, 255, 0.08), transparent 55%);
   pointer-events: none;
 }
 
-.dark .login-split-brand::after {
-  background: radial-gradient(ellipse 80% 60% at 10% 0%, rgba(255, 255, 255, 0.08), transparent 55%);
-}
-
 .login-split-accent-text {
-  color: #e4e4e7;
-  text-shadow: 0 0 36px rgba(255, 255, 255, 0.08);
-}
-
-.dark .login-split-accent-text {
   color: #f4f4f5;
   text-shadow: 0 0 28px rgba(255, 255, 255, 0.06);
 }
 
 .login-split-brand-heading,
 .login-split-brand-feature-heading {
-  color: #fafafa;
-}
-
-.dark .login-split-brand-heading,
-.dark .login-split-brand-feature-heading {
   color: #f4f4f5;
 }
 
 .login-split-brand-lead {
-  color: rgba(255, 255, 255, 0.72);
-}
-
-.dark .login-split-brand-lead {
   color: rgba(244, 244, 245, 0.7);
 }
 
@@ -341,12 +256,6 @@ body {
 }
 
 .login-split-feature-icon {
-  background: rgba(0, 0, 0, 0.28);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-.dark .login-split-feature-icon {
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
@@ -363,29 +272,14 @@ body {
 }
 
 .login-split-feature-desc {
-  color: rgba(255, 255, 255, 0.62);
-}
-
-.dark .login-split-feature-desc {
   color: rgba(255, 255, 255, 0.58);
 }
 
 .login-split-brand-footer {
-  color: rgba(255, 255, 255, 0.42);
-}
-
-.dark .login-split-brand-footer {
   color: rgba(255, 255, 255, 0.38);
 }
 
 .login-split-main {
-  background: #f3eaf4;
-  color: #18181b;
-  /* Dark app theme sets color-scheme: dark on the root; without this, native inputs use light text on odd fills. */
-  color-scheme: light;
-}
-
-.dark .login-split-main {
   background: #09090b;
   color: #fafafa;
   color-scheme: dark;
@@ -405,10 +299,6 @@ body {
 }
 
 .login-split-main input[type="checkbox"] {
-  accent-color: #71717a;
-}
-
-.dark .login-split-main input[type="checkbox"] {
   accent-color: #a1a1aa;
 }
 

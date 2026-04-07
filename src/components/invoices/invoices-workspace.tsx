@@ -4,10 +4,11 @@ import { createClient } from "@/lib/supabase/client";
 import { DatePicker } from "@/components/ui/date-picker";
 import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
+import { InvoiceEditForm } from "@/components/invoices/invoice-edit-form";
 import type { CompanyRow } from "@/types/company";
 import type { InvoiceTransportRow, RetailerInvoiceRow } from "@/types/invoice";
 import type { RetailerRow } from "@/types/retailer";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type TransitionEvent } from "react";
 
 type Props = {
@@ -273,6 +274,9 @@ export function InvoicesWorkspace({
   initialTransports,
 }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editIdFromQuery = searchParams.get("edit");
+  const editFromQueryHandled = useRef<string | null>(null);
   const [invoices, setInvoices] = useState<RetailerInvoiceRow[]>(initialInvoices);
   const [companies] = useState<CompanyRow[]>(initialCompanies);
   const [retailers] = useState<RetailerRow[]>(initialRetailers);
@@ -355,6 +359,22 @@ export function InvoicesWorkspace({
     [transports]
   );
 
+  useEffect(() => {
+    if (!editIdFromQuery) {
+      editFromQueryHandled.current = null;
+      return;
+    }
+    if (invoices.length === 0) return;
+    if (editFromQueryHandled.current === editIdFromQuery) return;
+    const inv = invoices.find((i) => i.id === editIdFromQuery);
+    if (!inv) return;
+    editFromQueryHandled.current = editIdFromQuery;
+    setSelected(inv);
+    setAddStep(1);
+    setPanel("edit");
+    router.replace("/invoices", { scroll: false });
+  }, [editIdFromQuery, invoices, router]);
+
   const finalizeClose = useCallback(() => {
     setPanel("closed");
     setSelected(null);
@@ -426,7 +446,6 @@ export function InvoicesWorkspace({
 
   const openEdit = (inv: RetailerInvoiceRow) => {
     setSelected(inv);
-    hydrateFromInvoice(inv);
     setAddStep(1);
     setPanel("edit");
   };
@@ -628,67 +647,6 @@ export function InvoicesWorkspace({
     setSaving(false);
     toastSuccess("Invoice saved.");
     requestClose();
-    router.refresh();
-  }
-
-  async function saveEdit() {
-    if (!selected || !validateForm()) return;
-    const retailer = retailerMap.get(retailerId);
-    const company = companies.find((c) => c.id === companyId);
-    if (!retailer || !company) {
-      toastError("Select company and retailer.");
-      return;
-    }
-
-    setSaving(true);
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setSaving(false);
-      toastError("You must be signed in.");
-      return;
-    }
-
-    const paid = Number(selected.payment_received ?? 0);
-    const payload = buildInvoicePayload(user.id, retailer, company, paid);
-    const transportAmt = payload.transportation_amount;
-
-    const { data: row, error } = await supabase
-      .from("retailer_invoices")
-      .update({
-        ...payload,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", selected.id)
-      .select()
-      .single();
-
-    if (error) {
-      setSaving(false);
-      toastError(error.message);
-      return;
-    }
-
-    const tErr = await syncTransportForInvoice(selected.id, user.id, transportAmt);
-    if (tErr.error) {
-      setSaving(false);
-      toastError(tErr.error.message);
-      return;
-    }
-
-    const inv = row as RetailerInvoiceRow;
-    setInvoices((prev) => prev.map((x) => (x.id === inv.id ? inv : x)).sort((a, b) => b.bill_date.localeCompare(a.bill_date)));
-    const { data: trRows } = await supabase.from("invoice_transports").select("*").eq("invoice_id", inv.id);
-    setTransports((prev) => {
-      const rest = prev.filter((t) => t.invoice_id !== inv.id);
-      return [...rest, ...((trRows ?? []) as InvoiceTransportRow[])];
-    });
-    setSelected(inv);
-    setSaving(false);
-    toastSuccess("Invoice updated.");
-    setPanel("view");
     router.refresh();
   }
 
@@ -1053,7 +1011,7 @@ export function InvoicesWorkspace({
             onClick={() => !saving && requestClose()}
           />
           <div
-            className="fixed inset-x-0 bottom-0 top-12 z-[90] flex max-h-[100dvh] flex-col rounded-t-3xl border border-zinc-700/90 bg-[#16181f] shadow-[0_-12px_40px_rgba(0,0,0,0.45)] md:left-auto md:right-0 md:top-0 md:max-h-none md:w-full md:max-w-lg md:rounded-none md:rounded-l-3xl md:border-l md:border-t-0"
+            className="fixed inset-x-0 bottom-0 top-12 z-[90] flex min-h-0 max-h-[100dvh] flex-col rounded-t-3xl border border-zinc-700/90 bg-[#16181f] shadow-[0_-12px_40px_rgba(0,0,0,0.45)] md:left-auto md:right-0 md:top-0 md:max-h-none md:w-full md:max-w-lg md:rounded-none md:rounded-l-3xl md:border-l md:border-t-0"
             role="dialog"
             aria-modal="true"
             aria-labelledby="invoice-sheet-title"
@@ -1101,7 +1059,13 @@ export function InvoicesWorkspace({
               </button>
             </div>
 
-            <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-32">
+            <div
+              className={`relative min-h-0 min-w-0 flex-1 px-4 py-4 ${
+                panel === "edit"
+                  ? "flex flex-col overflow-hidden pb-6"
+                  : "overflow-y-auto overscroll-contain pb-32"
+              }`}
+            >
               {panel === "view" && selected && (
                 <div>
                   <div className="mb-4 flex justify-end gap-4 border-b border-zinc-800/50 pb-3">
@@ -1143,26 +1107,40 @@ export function InvoicesWorkspace({
                 </div>
               )}
 
-              {(panel === "add" || panel === "edit") && (
+              {panel === "edit" && selected && (
+                <InvoiceEditForm
+                  invoice={selected}
+                  companies={companies}
+                  retailers={retailers}
+                  transports={transports}
+                  onSaved={async (inv) => {
+                    setInvoices((prev) =>
+                      prev.map((x) => (x.id === inv.id ? inv : x)).sort((a, b) => b.bill_date.localeCompare(a.bill_date))
+                    );
+                    const supabase = createClient();
+                    const { data: trRows } = await supabase.from("invoice_transports").select("*").eq("invoice_id", inv.id);
+                    setTransports((prev) => {
+                      const rest = prev.filter((t) => t.invoice_id !== inv.id);
+                      return [...rest, ...((trRows ?? []) as InvoiceTransportRow[])];
+                    });
+                    setSelected(inv);
+                    setPanel("view");
+                    router.refresh();
+                  }}
+                  onCancel={() => setPanel("view")}
+                />
+              )}
+              {panel === "add" && (
                 <form
                   id="invoice-form"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    if (panel === "add" && addStep === 1) return;
-                    void (panel === "add" ? saveNew() : saveEdit());
+                    if (addStep === 1) return;
+                    void saveNew();
                   }}
                 >
-                  {panel === "add" ? <InvoiceAddStepper step={addStep} /> : null}
-                  {panel === "edit" ? (
-                    <div className="space-y-6">
-                      {invoiceFormStep}
-                      {transportFormStep}
-                    </div>
-                  ) : addStep === 1 ? (
-                    invoiceFormStep
-                  ) : (
-                    transportFormStep
-                  )}
+                  <InvoiceAddStepper step={addStep} />
+                  {addStep === 1 ? invoiceFormStep : transportFormStep}
                 </form>
               )}
             </div>
@@ -1217,28 +1195,6 @@ export function InvoicesWorkspace({
               </div>
             )}
 
-            {panel === "edit" && (
-              <div className="absolute bottom-0 left-0 right-0 border-t border-zinc-700/80 bg-[#16181f]/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => selected && setPanel("view")}
-                    className="min-h-[48px] flex-1 rounded-xl border border-white/20 py-3 text-sm font-semibold text-white hover:bg-white/5 disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    form="invoice-form"
-                    disabled={saving}
-                    className="min-h-[48px] flex-1 rounded-xl bg-zinc-300 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 disabled:opacity-50"
-                  >
-                    {saving ? "Saving…" : "Save changes"}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </>
       )}

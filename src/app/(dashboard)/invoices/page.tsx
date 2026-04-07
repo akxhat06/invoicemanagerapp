@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { CompanyRow } from "@/types/company";
 import type { InvoiceTransportRow, RetailerInvoiceRow } from "@/types/invoice";
 import type { RetailerRow } from "@/types/retailer";
+import { Suspense } from "react";
 
 export default async function InvoicesPage() {
   const supabase = await createClient();
@@ -24,11 +25,19 @@ export default async function InvoicesPage() {
   }
 
   return (
-    <InvoicesWorkspace
-      initialInvoices={(invRes.data ?? []) as RetailerInvoiceRow[]}
-      initialCompanies={(coRes.data ?? []) as CompanyRow[]}
-      initialRetailers={(retRes.data ?? []) as RetailerRow[]}
-      initialTransports={(trRes.data ?? []) as InvoiceTransportRow[]}
-    />
+    <Suspense
+      fallback={
+        <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/40 px-4 py-10 text-center text-sm text-zinc-400">
+          Loading invoices…
+        </div>
+      }
+    >
+      <InvoicesWorkspace
+        initialInvoices={(invRes.data ?? []) as RetailerInvoiceRow[]}
+        initialCompanies={(coRes.data ?? []) as CompanyRow[]}
+        initialRetailers={(retRes.data ?? []) as RetailerRow[]}
+        initialTransports={(trRes.data ?? []) as InvoiceTransportRow[]}
+      />
+    </Suspense>
   );
 }

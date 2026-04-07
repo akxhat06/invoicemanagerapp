@@ -12,7 +12,7 @@ type Mode = "signin" | "signup";
 
 type Props = {
   mode: Mode;
-  /** Split-screen login: teal CTA, light form fields, optional “keep signed in”. */
+  /** Split-screen login: dark form fields, optional “keep signed in”. */
   variant?: "default" | "split";
 };
 
@@ -105,7 +105,7 @@ function EyeOffIcon() {
 }
 
 const inputLight =
-  "border-border bg-card text-foreground ring-primary/10 focus:border-primary/50 focus:ring-primary/15 dark:border-zinc-600/60 dark:bg-auth-input dark:text-zinc-100 dark:focus:border-amber-500/40 dark:focus:ring-amber-500/20";
+  "border-zinc-600/60 bg-auth-input text-zinc-100 ring-primary/10 focus:border-amber-500/40 focus:ring-amber-500/20";
 
 const inputSplit =
   "rounded-lg border border-zinc-600/70 bg-zinc-900/90 text-zinc-100 shadow-inner ring-0 placeholder:text-zinc-500 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/25";
@@ -135,7 +135,7 @@ export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
   const compactSplitSignup = !isSignIn && isSplit;
   const relax = skipRequiredFieldValidation();
   const inputPadY = compactSplitSignup ? "py-2.5" : "py-3";
-  const inputBase = `w-full rounded-lg border ${inputPadY} pl-11 pr-4 text-[15px] outline-none transition placeholder:text-zinc-400 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60${isSplit ? "" : " dark:placeholder:text-zinc-500"}`;
+  const inputBase = `w-full rounded-lg border ${inputPadY} pl-11 pr-4 text-[15px] outline-none transition placeholder:text-zinc-500 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60`;
   const inputWithToggle = `${inputBase} ${inputLight} pr-12`;
   const inputWithToggleSplit = `${inputBase} ${inputSplit} pr-12`;
   const fieldBase = isSplit ? inputSplit : inputLight;
@@ -144,10 +144,10 @@ export function EmailPasswordAuthForm({ mode, variant = "split" }: Props) {
     ? compactSplitSignup
       ? "login-split-field-label mb-1 block text-sm font-medium"
       : "login-split-field-label mb-1.5 block text-sm font-medium"
-    : "mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-200";
+    : "mb-1.5 block text-sm font-medium text-zinc-200";
   const iconToggleCls = isSplit
-    ? "absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-zinc-100/90 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/35 disabled:pointer-events-none disabled:opacity-40"
-    : "absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600/30 disabled:pointer-events-none disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-200 dark:focus-visible:ring-amber-500/25";
+    ? "absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/35 disabled:pointer-events-none disabled:opacity-40"
+    : "absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-800/80 hover:text-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/25 disabled:pointer-events-none disabled:opacity-40";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -2,17 +2,23 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { StateSearchSelect } from "@/components/companies/state-search-select";
+import { InvoiceEditForm } from "@/components/invoices/invoice-edit-form";
 import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
+import type { RetailerInvoiceRow } from "@/types/invoice";
 import { useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 type Props = {
   initialCompanies: CompanyRow[];
+  /** Invoices per company id (from server aggregate). */
+  initialInvoiceCountByCompany?: Record<string, number>;
 };
 
 type PanelMode = "closed" | "add" | "view" | "edit";
+
+type CompanyViewTab = "profile" | "invoices";
 
 /** Charcoal surface — slightly lifted from pure black */
 const CANVAS = "#101014";
@@ -46,12 +52,18 @@ function fieldClassDark(multiline = false) {
 
 const labelDark = "mb-1.5 block text-sm font-medium text-zinc-100";
 
+function formatInr(n: number) {
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(
+    Number.isFinite(n) ? n : 0
+  );
+}
+
 function ViewRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   const v = value?.trim();
   return (
-    <div className="border-b border-zinc-800/50 py-3.5 last:border-b-0">
-      <p className="text-xs text-zinc-500">{label}</p>
-      <p className={`mt-1 whitespace-pre-wrap text-[15px] leading-snug text-zinc-100 ${mono ? "font-mono text-sm tracking-tight" : ""}`}>
+    <div className="border-b border-zinc-800/40 py-3.5 last:border-b-0">
+      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">{label}</p>
+      <p className={`mt-1.5 whitespace-pre-wrap text-[15px] leading-snug text-zinc-50 ${mono ? "font-mono text-sm tracking-tight text-zinc-100" : ""}`}>
         {v || "—"}
       </p>
     </div>
@@ -188,7 +200,60 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
   );
 }
 
-export function CompaniesWorkspace({ initialCompanies }: Props) {
+function InvoiceDocIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function BuildingIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 9h.01M9 13h.01M9 17h.01M15 14h.01M15 18h.01" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function StatIconWrap({ tone, children }: { tone: "neutral" | "cyan" | "teal"; children: ReactNode }) {
+  const cls =
+    tone === "neutral"
+      ? "bg-white/[0.06] text-zinc-300 ring-white/[0.08]"
+      : tone === "cyan"
+        ? "bg-cyan-500/14 text-cyan-200 ring-cyan-400/15"
+        : "bg-teal-500/14 text-teal-200 ring-teal-400/18";
+  return (
+    <div
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ring-1 ${cls}`}
+      aria-hidden
+    >
+      {children}
+    </div>
+  );
+}
+
+function ViewSectionCard({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <div
+      className={`overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-inset ring-white/[0.04] ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ViewSubsectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="border-b border-zinc-800/60 bg-zinc-900 px-4 py-2.5">
+      <p className="border-l-2 border-teal-500/50 pl-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">{children}</p>
+    </div>
+  );
+}
+
+export function CompaniesWorkspace({ initialCompanies, initialInvoiceCountByCompany = {} }: Props) {
   const router = useRouter();
   const [companies, setCompanies] = useState<CompanyRow[]>(initialCompanies);
   const [panel, setPanel] = useState<PanelMode>("closed");
@@ -201,6 +266,15 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CompanyRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [companyInvoices, setCompanyInvoices] = useState<RetailerInvoiceRow[]>([]);
+  const [companyInvoicesLoading, setCompanyInvoicesLoading] = useState(false);
+  const [invoiceDeleteTarget, setInvoiceDeleteTarget] = useState<RetailerInvoiceRow | null>(null);
+  const [invoiceDeleting, setInvoiceDeleting] = useState(false);
+  /** When set, company sheet shows inline invoice editor instead of the invoice list. */
+  const [inlineInvoiceEdit, setInlineInvoiceEdit] = useState<RetailerInvoiceRow | null>(null);
+  const [invoiceCountByCompany, setInvoiceCountByCompany] = useState<Record<string, number>>(initialInvoiceCountByCompany);
+  const [companyViewTab, setCompanyViewTab] = useState<CompanyViewTab>("profile");
 
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
@@ -220,6 +294,44 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
   useEffect(() => {
     setCompanies(initialCompanies);
   }, [initialCompanies]);
+
+  useEffect(() => {
+    setInvoiceCountByCompany(initialInvoiceCountByCompany);
+  }, [initialInvoiceCountByCompany]);
+
+  const totalInvoicesAcrossCompanies = useMemo(
+    () => companies.reduce((sum, c) => sum + (invoiceCountByCompany[c.id] ?? 0), 0),
+    [companies, invoiceCountByCompany]
+  );
+
+  useEffect(() => {
+    if (panel !== "view" || !selected) {
+      setCompanyInvoices([]);
+      setCompanyInvoicesLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setCompanyInvoicesLoading(true);
+    (async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("retailer_invoices")
+        .select("*")
+        .eq("company_id", selected.id)
+        .order("bill_date", { ascending: false });
+      if (cancelled) return;
+      setCompanyInvoicesLoading(false);
+      if (error) {
+        toastError(error.message);
+        setCompanyInvoices([]);
+        return;
+      }
+      setCompanyInvoices((data ?? []) as RetailerInvoiceRow[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [panel, selected?.id]);
 
   const resetForm = useCallback(() => {
     setName("");
@@ -258,6 +370,7 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
   const finalizeClose = useCallback(() => {
     setPanel("closed");
     setSelected(null);
+    setInlineInvoiceEdit(null);
     resetForm();
     setAddStep(1);
     isAnimatingClose.current = false;
@@ -313,6 +426,8 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
   const openView = (c: CompanyRow) => {
     setSelected(c);
     hydrateFromCompany(c);
+    setCompanyViewTab("profile");
+    setInlineInvoiceEdit(null);
     setPanel("view");
   };
 
@@ -516,6 +631,30 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
     }
   }
 
+  async function confirmDeleteInvoice() {
+    if (!invoiceDeleteTarget) return;
+    setInvoiceDeleting(true);
+    const supabase = createClient();
+    const { error } = await supabase.from("retailer_invoices").delete().eq("id", invoiceDeleteTarget.id);
+    setInvoiceDeleting(false);
+    if (error) {
+      toastError(error.message);
+      return;
+    }
+    const prevLen = companyInvoices.length;
+    setCompanyInvoices((prev) => prev.filter((i) => i.id !== invoiceDeleteTarget.id));
+    if (inlineInvoiceEdit?.id === invoiceDeleteTarget.id) setInlineInvoiceEdit(null);
+    if (selected) {
+      setInvoiceCountByCompany((prev) => ({
+        ...prev,
+        [selected.id]: Math.max(0, (prev[selected.id] ?? prevLen) - 1),
+      }));
+    }
+    toastSuccess("Invoice deleted.");
+    setInvoiceDeleteTarget(null);
+    router.refresh();
+  }
+
   async function confirmDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -527,6 +666,11 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
       return;
     }
     setCompanies((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+    setInvoiceCountByCompany((prev) => {
+      const next = { ...prev };
+      delete next[deleteTarget.id];
+      return next;
+    });
     toastSuccess("Company deleted.");
     setDeleteTarget(null);
     if (selected?.id === deleteTarget.id) requestClose();
@@ -540,6 +684,28 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
     return "";
   }, [panel, selected]);
 
+  const companyViewStats = useMemo(() => {
+    if (companyInvoicesLoading) {
+      return { loading: true as const, invoiceCount: 0, retailerCount: 0, totalAmount: 0 };
+    }
+    let total = 0;
+    const retailerKeys = new Set<string>();
+    for (const inv of companyInvoices) {
+      total += Number(inv.total_amount ?? 0);
+      if (inv.retailer_id) {
+        retailerKeys.add(`id:${inv.retailer_id}`);
+      } else if (inv.retailer_name?.trim()) {
+        retailerKeys.add(`name:${inv.retailer_name.trim().toLowerCase()}`);
+      }
+    }
+    return {
+      loading: false as const,
+      invoiceCount: companyInvoices.length,
+      retailerCount: retailerKeys.size,
+      totalAmount: total,
+    };
+  }, [companyInvoices, companyInvoicesLoading]);
+
   const inputStyle = { backgroundColor: INPUT_BG } as React.CSSProperties;
 
   return (
@@ -548,56 +714,104 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
       style={{ backgroundColor: CANVAS }}
     >
       <div className="mb-6">
-        <div className="mb-1 flex items-center gap-2">
-          <span className="h-5 w-1 rounded-full bg-zinc-500" aria-hidden />
-          <h2 className="font-login-serif text-xl font-semibold tracking-tight text-white sm:text-2xl">Companies</h2>
+        <div className="mb-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="mb-1 flex items-center gap-2">
+              <span
+                className="h-5 w-1 rounded-full bg-gradient-to-b from-cyan-400 via-teal-500 to-teal-700 shadow-[0_0_12px_rgba(45,212,191,0.35)]"
+                aria-hidden
+              />
+              <h2 className="font-login-serif text-xl font-semibold tracking-tight text-white sm:text-2xl">Companies</h2>
+            </div>
+            <p className="max-w-xl text-sm leading-relaxed text-zinc-400">
+              Billing entities for your invoices—contact, GST, and bank details in one place.
+            </p>
+          </div>
+          {companies.length > 0 ? (
+            <div className="flex shrink-0 gap-2 sm:justify-end">
+              <div className="rounded-xl border border-zinc-700/60 bg-zinc-900 px-3.5 py-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Companies</p>
+                <p className="mt-0.5 text-lg font-bold tabular-nums text-white">{companies.length}</p>
+              </div>
+              <div className="rounded-xl border border-cyan-900/40 bg-zinc-900 px-3.5 py-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-cyan-500/10">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Invoices</p>
+                <p className="mt-0.5 text-lg font-bold tabular-nums text-cyan-200">{totalInvoicesAcrossCompanies}</p>
+              </div>
+            </div>
+          ) : null}
         </div>
-        <p className="text-sm text-zinc-400">Manage company profiles and bank details from one place.</p>
       </div>
 
       {companies.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-700 bg-zinc-900/40 px-6 py-14 text-center">
-          <p className="font-semibold text-white">No companies yet</p>
-          <p className="mt-2 max-w-sm text-sm text-zinc-400">Add a company to use it on invoices and retailers.</p>
+        <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-700/70 bg-gradient-to-b from-zinc-900/50 via-zinc-950/80 to-zinc-950 px-6 py-16 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-zinc-600/50 bg-zinc-900 text-zinc-400 shadow-[0_8px_32px_rgba(0,0,0,0.35)] ring-1 ring-white/[0.06]">
+            <BuildingIcon className="h-8 w-8 opacity-90" />
+          </div>
+          <p className="text-lg font-semibold tracking-tight text-white">No companies yet</p>
+          <p className="mt-2 max-w-sm text-sm leading-relaxed text-zinc-400">
+            Add a billing entity to use on invoices and link to retailers.
+          </p>
           <button
             type="button"
             onClick={openAdd}
-            className="mt-6 rounded-xl bg-zinc-300 px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200"
+            className="mt-7 rounded-xl bg-zinc-200 px-6 py-3.5 text-sm font-semibold text-zinc-950 shadow-[0_4px_20px_rgba(255,255,255,0.08)] transition hover:bg-white active:scale-[0.98]"
           >
             Add your first company
           </button>
         </div>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-3">
           {companies.map((c) => {
             const phoneDigits = phoneDigitsFromStored(c.phone_no);
             const phoneLabel = phoneDigits ? `+91 ${phoneDigits}` : "—";
+            const invCount = invoiceCountByCompany[c.id] ?? 0;
+            const gstShort = c.gst_no?.trim() ? `${c.gst_no.slice(0, 2)}···${c.gst_no.slice(-4)}` : null;
 
             return (
               <li key={c.id}>
                 <button
                   type="button"
                   onClick={() => openView(c)}
-                  className="group flex w-full items-stretch overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950/35 text-left transition hover:border-zinc-600/80 hover:bg-zinc-900/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500"
+                  className="group flex w-full items-stretch overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-950 to-zinc-950/85 text-left shadow-[0_1px_0_rgba(255,255,255,0.05)_inset,0_8px_24px_rgba(0,0,0,0.2)] ring-1 ring-white/[0.03] transition hover:border-zinc-600/80 hover:from-zinc-900/95 hover:to-zinc-950 hover:shadow-[0_12px_40px_rgba(0,0,0,0.35)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-500/45 active:scale-[0.995]"
                 >
-                  <span className="w-1 shrink-0 bg-zinc-500" aria-hidden />
-                  <div className="flex min-w-0 flex-1 items-center gap-3 py-3.5 pl-3 pr-4">
+                  <span
+                    className="w-1.5 shrink-0 bg-gradient-to-b from-cyan-400/95 via-teal-500/85 to-teal-700/70 shadow-[2px_0_12px_rgba(45,212,191,0.2)]"
+                    aria-hidden
+                  />
+                  <div className="flex min-w-0 flex-1 items-center gap-3 py-4 pl-4 pr-3 sm:gap-4 sm:pl-5 sm:pr-4">
                     <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-baseline gap-2">
-                        <h3 className="truncate text-base font-semibold text-white">{c.name}</h3>
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                        <h3 className="truncate text-[17px] font-semibold tracking-tight text-white">{c.name}</h3>
                         {c.is_draft ? (
-                          <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                          <span className="shrink-0 rounded-md border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">
                             Draft
                           </span>
                         ) : null}
                       </div>
-                      <p className="mt-0.5 font-mono text-[15px] tabular-nums tracking-tight text-zinc-400">{phoneLabel}</p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-500">
+                        <span className="font-mono tabular-nums tracking-tight text-zinc-400">{phoneLabel}</span>
+                        {gstShort ? (
+                          <span className="text-xs text-zinc-500">
+                            GST <span className="font-mono text-zinc-400">{gstShort}</span>
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
-                    <span className="shrink-0 text-zinc-600 transition group-hover:text-zinc-400" aria-hidden>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </span>
+                    <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-3">
+                      <div
+                        className="flex items-center gap-1.5 rounded-full border border-zinc-700/60 bg-zinc-900 px-2.5 py-1 text-xs font-medium text-zinc-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                        title={`${invCount} invoice${invCount === 1 ? "" : "s"}`}
+                      >
+                        <InvoiceDocIcon className="h-3.5 w-3.5 text-cyan-400" />
+                        <span className="tabular-nums">{invCount}</span>
+                        <span className="hidden text-zinc-500 sm:inline">inv.</span>
+                      </div>
+                      <span className="text-zinc-600 transition group-hover:text-zinc-400" aria-hidden>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                    </div>
                   </div>
                 </button>
               </li>
@@ -610,7 +824,7 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
       <button
         type="button"
         onClick={openAdd}
-        className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-300 text-zinc-950 shadow-lg transition hover:scale-105 hover:bg-zinc-200 active:scale-95 md:bottom-10 md:right-10"
+        className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-200 text-zinc-950 shadow-[0_4px_24px_rgba(45,212,191,0.22),0_8px_32px_rgba(0,0,0,0.45)] ring-2 ring-[#101014] transition hover:scale-105 hover:bg-white hover:shadow-[0_6px_28px_rgba(45,212,191,0.28)] active:scale-95 md:bottom-10 md:right-10"
         aria-label="Add company"
       >
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
@@ -629,7 +843,7 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
             onClick={() => !saving && requestClose()}
           />
           <div
-            className={`fixed inset-x-0 bottom-0 top-12 z-[90] flex max-h-[100dvh] flex-col rounded-t-3xl border border-zinc-700/90 bg-[#16181f] shadow-[0_-12px_40px_rgba(0,0,0,0.45)] md:left-auto md:right-0 md:top-0 md:max-h-none md:w-full md:max-w-lg md:rounded-none md:rounded-l-3xl md:border-l md:border-t-0`}
+            className={`fixed inset-x-0 bottom-0 top-12 z-[90] flex min-h-0 max-h-[100dvh] flex-col overflow-hidden rounded-t-3xl border border-zinc-600/50 bg-[#16181f] shadow-[0_-16px_48px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] md:left-auto md:right-0 md:top-0 md:max-h-none md:w-full md:max-w-lg md:rounded-none md:rounded-l-3xl md:border-l md:border-t-0`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="company-sheet-title"
@@ -640,8 +854,8 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
               willChange: "transform",
             }}
           >
-            <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-zinc-600 md:hidden" aria-hidden />
-            <div className="flex shrink-0 items-center gap-3 border-b border-zinc-700/80 px-4 py-3">
+            <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-zinc-600/90 md:hidden" aria-hidden />
+            <div className="relative z-20 flex shrink-0 items-center gap-3 border-b border-zinc-700/70 bg-gradient-to-b from-[#181a22] to-[#16181f] px-4 py-3.5">
               <button
                 type="button"
                 onClick={() => {
@@ -662,7 +876,10 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
                   <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
-              <h2 id="company-sheet-title" className="flex-1 truncate text-center text-lg font-semibold text-white md:text-left">
+              <h2
+                id="company-sheet-title"
+                className="flex-1 truncate text-center text-lg font-semibold tracking-tight text-white md:text-left"
+              >
                 {panelTitle}
               </h2>
               <button
@@ -677,51 +894,297 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-32">
-              {panel === "view" && selected && (
-                <div>
-                  <div className="mb-4 flex justify-end gap-4 border-b border-zinc-800/50 pb-3">
-                    <button type="button" onClick={startEdit} className="text-sm font-medium text-zinc-400 transition hover:text-white">
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeleteTarget(selected)}
-                      className="text-sm font-medium text-red-400/90 transition hover:text-red-300"
+            {panel === "view" && selected && !inlineInvoiceEdit && (
+              <div className="shrink-0 border-b border-zinc-800/80 bg-[#16181f] px-4 pb-3 pt-0 shadow-[0_8px_28px_rgba(0,0,0,0.55)]">
+                    <div
+                      role="region"
+                      aria-label="Invoice summary for this company"
+                      className="mb-3 rounded-xl bg-zinc-900 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ring-1 ring-white/[0.04]"
                     >
-                      Delete
-                    </button>
-                  </div>
-                  <div>
-                    <ViewRow label="Company name" value={selected.name ?? ""} />
-                    {selected.is_draft ? <ViewRow label="Status" value="Draft" /> : null}
-                    <ViewRow label="Telephone" value={selected.telephone ?? ""} />
-                    <ViewRow
-                      label="Phone"
-                      value={phoneDigitsFromStored(selected.phone_no) ? `+91 ${phoneDigitsFromStored(selected.phone_no)}` : ""}
-                      mono
-                    />
-                    <ViewRow
-                      label="Alternative"
-                      value={
-                        phoneDigitsFromStored(selected.alternative_phone)
-                          ? `+91 ${phoneDigitsFromStored(selected.alternative_phone)}`
-                          : ""
-                      }
-                      mono
-                    />
-                    <ViewRow label="Address" value={selected.registered_address ?? ""} />
-                    <ViewRow label="GST no." value={selected.gst_no ?? ""} mono />
-                    <ViewRow label="Email address" value={selected.email ?? ""} />
-                    <ViewRow label="City" value={selected.city ?? ""} />
-                    <ViewRow label="State" value={selected.state ?? ""} />
-                    <ViewRow label="PIN code" value={selected.pin_code ?? ""} mono />
-                    <ViewRow label="Account holder" value={selected.bank_account_holder ?? ""} />
-                    <ViewRow label="Bank name" value={selected.bank_name ?? ""} />
-                    <ViewRow label="Account number" value={selected.bank_account_number ?? ""} mono />
-                    <ViewRow label="IFSC code" value={selected.bank_ifsc ?? ""} mono />
-                    <ViewRow label="Branch" value={selected.bank_branch ?? ""} />
-                  </div>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        <div className="flex gap-2.5 rounded-lg border border-zinc-700/50 bg-zinc-950 px-2.5 py-2.5 sm:min-h-[5.5rem]">
+                          <StatIconWrap tone="neutral">
+                            <InvoiceDocIcon className="h-4 w-4" />
+                          </StatIconWrap>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Invoices</p>
+                            {companyViewStats.loading ? (
+                              <div className="mt-2 h-7 w-12 animate-pulse rounded-md bg-zinc-800/80" aria-hidden />
+                            ) : (
+                              <p className="mt-0.5 text-xl font-bold tabular-nums text-white">{companyViewStats.invoiceCount}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-2.5 rounded-lg border border-zinc-700/50 bg-zinc-950 px-2.5 py-2.5 sm:min-h-[5.5rem]">
+                          <StatIconWrap tone="cyan">
+                            <BuildingIcon className="h-4 w-4" />
+                          </StatIconWrap>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Retailers</p>
+                            {companyViewStats.loading ? (
+                              <div className="mt-2 h-7 w-12 animate-pulse rounded-md bg-zinc-800/80" aria-hidden />
+                            ) : (
+                              <p className="mt-0.5 text-xl font-bold tabular-nums text-cyan-200">{companyViewStats.retailerCount}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="col-span-2 flex gap-2.5 rounded-lg border border-teal-800/45 bg-zinc-950 px-2.5 py-2.5 ring-1 ring-teal-500/10 sm:col-span-1">
+                          <StatIconWrap tone="teal">
+                            <span className="text-[15px] font-semibold leading-none">₹</span>
+                          </StatIconWrap>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Total amount</p>
+                            {companyViewStats.loading ? (
+                              <div className="mt-2 h-7 w-28 max-w-full animate-pulse rounded-md bg-zinc-800/80" aria-hidden />
+                            ) : (
+                              <p className="mt-0.5 truncate font-mono text-base font-bold tabular-nums tracking-tight text-teal-200 sm:text-lg">
+                                {formatInr(companyViewStats.totalAmount)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      role="tablist"
+                      aria-label="Company details"
+                      className="flex gap-1 rounded-xl border border-zinc-700/70 bg-zinc-950 p-1 shadow-[inset_0_2px_8px_rgba(0,0,0,0.35)] ring-1 ring-white/[0.04]"
+                    >
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={companyViewTab === "profile"}
+                        id="tab-company-profile"
+                        aria-controls="panel-company-profile"
+                        onClick={() => {
+                          setCompanyViewTab("profile");
+                          setInlineInvoiceEdit(null);
+                        }}
+                        className={`relative flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition ${
+                          companyViewTab === "profile"
+                            ? "bg-zinc-600 text-white shadow-[0_2px_8px_rgba(0,0,0,0.35)] ring-1 ring-white/10"
+                            : "text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300"
+                        }`}
+                      >
+                        <BuildingIcon className="h-4 w-4 shrink-0 opacity-90" />
+                        Company
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={companyViewTab === "invoices"}
+                        id="tab-company-invoices"
+                        aria-controls="panel-company-invoices"
+                        onClick={() => setCompanyViewTab("invoices")}
+                        className={`relative flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition ${
+                          companyViewTab === "invoices"
+                            ? "bg-zinc-600 text-white shadow-[0_2px_8px_rgba(0,0,0,0.35)] ring-1 ring-white/10"
+                            : "text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300"
+                        }`}
+                      >
+                        <InvoiceDocIcon className="h-4 w-4 shrink-0 opacity-90" />
+                        <span>Invoices</span>
+                        {!companyInvoicesLoading ? (
+                          <span
+                            className={`min-w-[1.25rem] rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${
+                              companyViewTab === "invoices" ? "bg-teal-500/25 text-teal-100" : "bg-zinc-800 text-zinc-400"
+                            }`}
+                          >
+                            {companyInvoices.length}
+                          </span>
+                        ) : (
+                          <span className="h-4 w-4 animate-pulse rounded bg-zinc-700" aria-hidden />
+                        )}
+                      </button>
+                    </div>
+              </div>
+            )}
+
+            <div
+              className={`relative min-h-0 min-w-0 flex-1 bg-[#16181f] px-4 py-4 ${
+                inlineInvoiceEdit
+                  ? "flex flex-col overflow-hidden pb-6"
+                  : "overflow-y-auto overscroll-contain pb-32"
+              }`}
+            >
+              {panel === "view" && selected && (
+                <div
+                  className={
+                    inlineInvoiceEdit ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" : undefined
+                  }
+                >
+                  {companyViewTab === "profile" ? (
+                    <section
+                      id="panel-company-profile"
+                      role="tabpanel"
+                      aria-labelledby="tab-company-profile"
+                      className="relative z-0"
+                    >
+                      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <p className="max-w-md text-xs leading-relaxed text-zinc-500">
+                          Contact, GST, location, and bank details for this billing entity.
+                        </p>
+                        <div className="relative z-0 flex w-full shrink-0 items-center gap-2 rounded-xl border border-zinc-800/90 bg-zinc-900 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:w-auto">
+                          <button
+                            type="button"
+                            onClick={startEdit}
+                            className="min-h-[40px] flex-1 rounded-lg border border-zinc-600/70 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 transition hover:border-zinc-500 hover:bg-zinc-700 hover:text-white sm:flex-none"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(selected)}
+                            className="min-h-[40px] flex-1 rounded-lg border border-red-500/45 bg-red-950 px-4 py-2 text-sm font-medium text-red-200 transition hover:border-red-400/60 hover:bg-red-900 sm:flex-none"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      <ViewSectionCard>
+                        <ViewSubsectionLabel>Contact &amp; registration</ViewSubsectionLabel>
+                        <div className="px-3 pb-2 pt-0.5 sm:px-4">
+                          <ViewRow label="Company name" value={selected.name ?? ""} />
+                          {selected.is_draft ? <ViewRow label="Status" value="Draft" /> : null}
+                          <ViewRow label="Telephone" value={selected.telephone ?? ""} />
+                          <ViewRow
+                            label="Phone"
+                            value={phoneDigitsFromStored(selected.phone_no) ? `+91 ${phoneDigitsFromStored(selected.phone_no)}` : ""}
+                            mono
+                          />
+                          <ViewRow
+                            label="Alternative"
+                            value={
+                              phoneDigitsFromStored(selected.alternative_phone)
+                                ? `+91 ${phoneDigitsFromStored(selected.alternative_phone)}`
+                                : ""
+                            }
+                            mono
+                          />
+                          <ViewRow label="Email address" value={selected.email ?? ""} />
+                          <ViewRow label="Address" value={selected.registered_address ?? ""} />
+                          <ViewRow label="City" value={selected.city ?? ""} />
+                          <ViewRow label="State" value={selected.state ?? ""} />
+                          <ViewRow label="PIN code" value={selected.pin_code ?? ""} mono />
+                          <ViewRow label="GST no." value={selected.gst_no ?? ""} mono />
+                        </div>
+
+                        <ViewSubsectionLabel>Bank details</ViewSubsectionLabel>
+                        <div className="px-3 pb-2 pt-0.5 sm:px-4">
+                          <ViewRow label="Account holder" value={selected.bank_account_holder ?? ""} />
+                          <ViewRow label="Bank name" value={selected.bank_name ?? ""} />
+                          <ViewRow label="Account number" value={selected.bank_account_number ?? ""} mono />
+                          <ViewRow label="IFSC code" value={selected.bank_ifsc ?? ""} mono />
+                          <ViewRow label="Branch" value={selected.bank_branch ?? ""} />
+                        </div>
+                      </ViewSectionCard>
+                    </section>
+                  ) : (
+                    <section
+                      id="panel-company-invoices"
+                      role="tabpanel"
+                      aria-labelledby="tab-company-invoices"
+                      className={`relative z-0 ${inlineInvoiceEdit ? "flex min-h-0 flex-1 flex-col" : ""}`}
+                    >
+                      {inlineInvoiceEdit ? (
+                        <div className="flex min-h-0 flex-1 flex-col">
+                          <div className="mb-4 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setInlineInvoiceEdit(null)}
+                              className="inline-flex items-center gap-2 rounded-lg border border-zinc-700/80 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800"
+                            >
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                                <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                              Back to list
+                            </button>
+                            <p className="mt-3 text-sm text-zinc-400">
+                              Editing{" "}
+                              <span className="font-mono font-semibold text-white">{inlineInvoiceEdit.invoice_number}</span>
+                            </p>
+                          </div>
+                          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                            <InvoiceEditForm
+                              invoice={inlineInvoiceEdit}
+                              companies={companies}
+                              onSaved={(row) => {
+                                setCompanyInvoices((prev) => prev.map((x) => (x.id === row.id ? row : x)));
+                                setInlineInvoiceEdit(null);
+                                router.refresh();
+                              }}
+                              onCancel={() => setInlineInvoiceEdit(null)}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="mb-4 text-xs leading-relaxed text-zinc-500">
+                            Invoices for this company. Edit here without leaving this screen; delete removes the invoice permanently.
+                          </p>
+
+                          <ViewSectionCard className="border-teal-900/40 ring-teal-500/[0.07]">
+                            {companyInvoicesLoading ? (
+                              <div className="flex items-center gap-3 px-4 py-8">
+                                <span
+                                  className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-zinc-600 border-t-teal-400"
+                                  aria-hidden
+                                />
+                                <p className="text-sm text-zinc-400">Loading invoices…</p>
+                              </div>
+                            ) : companyInvoices.length === 0 ? (
+                              <div className="px-4 py-10 text-center">
+                                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800/80 bg-zinc-900/50 text-zinc-600">
+                                  <InvoiceDocIcon className="h-6 w-6" />
+                                </div>
+                                <p className="text-sm font-medium text-zinc-300">No invoices yet</p>
+                                <p className="mt-1 text-xs text-zinc-500">Create an invoice from the Invoices tab and select this company.</p>
+                              </div>
+                            ) : (
+                              <ul>
+                                {companyInvoices.map((inv) => (
+                                  <li
+                                    key={inv.id}
+                                    className="flex flex-wrap items-center gap-3 border-b border-zinc-800/45 px-3 py-4 transition-colors last:border-b-0 hover:bg-zinc-900/45 sm:flex-nowrap sm:px-4"
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-semibold tracking-tight text-white">{inv.invoice_number}</p>
+                                      <p className="mt-0.5 text-xs text-zinc-500">
+                                        {(inv.bill_date ?? "").slice(0, 10)}
+                                        <span className="text-zinc-600"> · </span>
+                                        {inv.retailer_name?.trim() || "—"}
+                                      </p>
+                                      <p className="mt-1.5 font-mono text-sm font-medium tabular-nums text-teal-200">
+                                        {formatInr(Number(inv.total_amount ?? 0))}
+                                      </p>
+                                    </div>
+                                    <div className="flex w-full shrink-0 gap-2 sm:w-auto">
+                                      <button
+                                        type="button"
+                                        onClick={() => setInlineInvoiceEdit(inv)}
+                                        className="flex-1 rounded-lg border border-zinc-600/60 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-100 transition hover:border-zinc-500 hover:bg-zinc-800 hover:text-white sm:flex-none"
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setInvoiceDeleteTarget(inv)}
+                                        className="flex-1 rounded-lg border border-red-500/35 bg-red-950 px-3 py-2 text-sm font-medium text-red-200 transition hover:border-red-400/50 hover:bg-red-900 sm:flex-none"
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </ViewSectionCard>
+                        </>
+                      )}
+                    </section>
+                  )}
                 </div>
               )}
 
@@ -1260,6 +1723,46 @@ export function CompaniesWorkspace({ initialCompanies }: Props) {
                 className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
               >
                 {deleting ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {invoiceDeleteTarget && (
+        <>
+          <div
+            className="fixed inset-0 z-[100] bg-black/70"
+            aria-hidden
+            onClick={() => !invoiceDeleting && setInvoiceDeleteTarget(null)}
+          />
+          <div
+            role="alertdialog"
+            aria-labelledby="del-inv-title"
+            className="fixed left-1/2 top-1/2 z-[101] w-[min(100%-2rem,22rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-zinc-700 bg-[#1A1C26] p-5 shadow-xl"
+          >
+            <h3 id="del-inv-title" className="text-lg font-semibold text-white">
+              Delete invoice?
+            </h3>
+            <p className="mt-2 text-sm text-zinc-400">
+              Remove invoice <span className="font-medium text-white">{invoiceDeleteTarget.invoice_number}</span>? This cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={invoiceDeleting}
+                onClick={() => setInvoiceDeleteTarget(null)}
+                className="rounded-xl px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={invoiceDeleting}
+                onClick={() => void confirmDeleteInvoice()}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {invoiceDeleting ? "Deleting…" : "Delete"}
               </button>
             </div>
           </div>
