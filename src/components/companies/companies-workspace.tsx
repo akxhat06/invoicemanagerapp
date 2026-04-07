@@ -1371,9 +1371,14 @@ export function CompaniesWorkspace({
                                         <span className="text-zinc-600"> · </span>
                                         {inv.retailer_name?.trim() || "—"}
                                       </p>
-                                      <p className="mt-1.5 font-mono text-sm font-medium tabular-nums text-teal-200">
-                                        {formatInr(Number(inv.total_amount ?? 0))}
-                                      </p>
+                                      <div className="mt-1.5 space-y-0.5">
+                                        <p className="font-mono text-sm font-medium tabular-nums text-teal-200">
+                                          Total: {formatInr(Number(inv.total_amount ?? 0))}
+                                        </p>
+                                        <p className="font-mono text-xs font-medium tabular-nums text-sky-200/90">
+                                          Transport: {formatInr(Number(inv.transportation_amount ?? 0))}
+                                        </p>
+                                      </div>
                                     </div>
                                     <div className="flex w-full shrink-0 gap-2 sm:w-auto">
                                       <button

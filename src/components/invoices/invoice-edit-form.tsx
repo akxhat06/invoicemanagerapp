@@ -42,11 +42,6 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-function gstPercentFromAmounts(basic: number, gstAmt: number): string {
-  if (basic <= 0 || gstAmt < 0) return "";
-  return String(round2((gstAmt / basic) * 100));
-}
-
 function firstTransportForInvoice(transports: InvoiceTransportRow[], invoiceId: string): InvoiceTransportRow | null {
   const rows = transports.filter((t) => t.invoice_id === invoiceId).sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -96,11 +91,12 @@ export function InvoiceEditForm({
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [basicAmount, setBasicAmount] = useState("");
-  const [gstPercent, setGstPercent] = useState("");
+  const [gstAmount, setGstAmount] = useState("");
   const [transportName, setTransportName] = useState("");
   const [lrNo, setLrNo] = useState("");
   const [lrDate, setLrDate] = useState(todayISODate());
   const [transportAmount, setTransportAmount] = useState("");
+  const [activeTab, setActiveTab] = useState<"main" | "transport">("main");
 
   const inputStyle = { backgroundColor: INPUT_BG } as CSSProperties;
 
@@ -148,7 +144,7 @@ export function InvoiceEditForm({
       const basic = Number(inv.basic_amount ?? 0);
       const gstAmt = Number(inv.gst_amount ?? 0);
       setBasicAmount(String(basic));
-      setGstPercent(gstPercentFromAmounts(basic, gstAmt));
+      setGstAmount(String(gstAmt));
       const t = firstTransportForInvoice(tr, inv.id);
       if (t) {
         setTransportName(t.transport_name ?? "");
@@ -197,13 +193,13 @@ export function InvoiceEditForm({
       toastError("Enter base amount.");
       return false;
     }
-    const pct = toNum(gstPercent);
-    if (pct < 0 || pct > 100) {
-      toastError("GST % must be between 0 and 100.");
+    const gst = toNum(gstAmount);
+    if (gst < 0) {
+      toastError("GST amount cannot be negative.");
       return false;
     }
-    if (!gstPercent.trim() && !skipRequiredFieldValidation()) {
-      toastError("Enter GST % (use 0 if exempt).");
+    if (!gstAmount.trim() && !skipRequiredFieldValidation()) {
+      toastError("Enter GST amount (use 0 if exempt).");
       return false;
     }
     return true;
@@ -214,16 +210,6 @@ export function InvoiceEditForm({
     if (skipRequiredFieldValidation()) return true;
     if (toNum(transportAmount) < 0) {
       toastError("Transport amount cannot be negative.");
-      return false;
-    }
-    const tn = transportName.trim();
-    const ta = toNum(transportAmount);
-    if (ta > 0 && !tn) {
-      toastError("Enter transport name when amount is set.");
-      return false;
-    }
-    if (tn && ta <= 0 && !skipRequiredFieldValidation()) {
-      toastError("Enter transport amount when name is set.");
       return false;
     }
     return true;
@@ -243,18 +229,12 @@ export function InvoiceEditForm({
       return { error: null };
     }
 
-    if (!tName.trim()) {
-      return { error: new Error("Transport name is required when adding transport details.") };
-    }
-    if (transportAmt <= 0 && !skipRequiredFieldValidation()) {
-      return { error: new Error("Enter transport amount.") };
-    }
-    const amt = transportAmt > 0 ? transportAmt : skipRequiredFieldValidation() ? 0.01 : 0;
+    const amt = Math.max(0, transportAmt);
 
     const { error } = await supabase.from("invoice_transports").insert({
       user_id: userId,
       invoice_id: invoiceId,
-      transport_name: tName.trim(),
+      transport_name: tName || "Transport",
       lr_no: lrNo.trim() || null,
       lr_date: lrDate || null,
       amount: amt,
@@ -272,11 +252,10 @@ export function InvoiceEditForm({
   ) {
     const dev = skipRequiredFieldValidation();
     const basic = round2(toNum(basicAmount));
-    const pct = toNum(gstPercent);
-    const gstAmt = round2((basic * pct) / 100);
+    const gstAmt = round2(toNum(gstAmount));
     const invAmt = round2(basic + gstAmt);
     const transportAmt = round2(toNum(transportAmount));
-    const total = round2(invAmt + transportAmt);
+    const total = round2(invAmt);
     const paid = round2(paymentReceived);
     const outstanding = Math.max(0, round2(total - paid));
 
@@ -365,11 +344,7 @@ export function InvoiceEditForm({
     void saveEdit();
   }
 
-  const computedGstAmountPreview = useMemo(() => {
-    const basic = round2(toNum(basicAmount));
-    const pct = toNum(gstPercent);
-    return round2((basic * pct) / 100);
-  }, [basicAmount, gstPercent]);
+  const computedGstAmountPreview = useMemo(() => round2(toNum(gstAmount)), [gstAmount]);
 
   const computedInvoiceAmountPreview = useMemo(
     () => round2(toNum(basicAmount) + computedGstAmountPreview),
@@ -393,6 +368,36 @@ export function InvoiceEditForm({
       {/* Scroll only the form; footer stays after all fields (never between inputs). */}
       <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
         <form id="invoice-edit-inline-form" className="space-y-5 pb-4" onSubmit={onSubmit}>
+        <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-1 ring-1 ring-white/[0.03]">
+          <div className="grid grid-cols-2 gap-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab("main")}
+              aria-pressed={activeTab === "main"}
+              className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                activeTab === "main"
+                  ? "bg-amber-500/15 text-amber-100 ring-1 ring-amber-500/30"
+                  : "text-zinc-400 hover:bg-zinc-900/70 hover:text-zinc-200"
+              }`}
+            >
+              Main bill
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("transport")}
+              aria-pressed={activeTab === "transport"}
+              className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                activeTab === "transport"
+                  ? "bg-sky-500/15 text-sky-100 ring-1 ring-sky-500/30"
+                  : "text-zinc-400 hover:bg-zinc-900/70 hover:text-zinc-200"
+              }`}
+            >
+              Transport
+            </button>
+          </div>
+        </div>
+        {activeTab === "main" ? (
+        <>
         <div className={SECTION_WRAP}>
           <h3 className={SECTION_TITLE}>Party &amp; document</h3>
           <div className="space-y-4">
@@ -522,20 +527,19 @@ export function InvoiceEditForm({
           </div>
 
           <div>
-            <label className={labelDark} htmlFor="inv-edit-gst-pct">
-              GST (%) <span className="text-red-400">*</span>
+            <label className={labelDark} htmlFor="inv-edit-gst-amt">
+              GST amount <span className="text-red-400">*</span>
             </label>
             <input
-              id="inv-edit-gst-pct"
+              id="inv-edit-gst-amt"
               inputMode="decimal"
-              value={gstPercent}
-              onChange={(e) => setGstPercent(e.target.value)}
+              value={gstAmount}
+              onChange={(e) => setGstAmount(e.target.value)}
               disabled={saving}
               className={fieldClassDark()}
               style={inputStyle}
-              placeholder="e.g. 18"
+              placeholder="0.00"
             />
-            <p className="mt-1 text-[11px] text-zinc-500">GST amount = base × % ÷ 100.</p>
           </div>
 
           <div className="rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-950/35 via-zinc-950/50 to-zinc-950 p-4 ring-1 ring-amber-500/10">
@@ -566,7 +570,10 @@ export function InvoiceEditForm({
           </div>
           </div>
         </div>
+        </>
+        ) : null}
 
+        {activeTab === "transport" ? (
         <div className={SECTION_WRAP}>
           <h3 className={SECTION_TITLE}>Transport</h3>
           <div className="space-y-4">
@@ -641,6 +648,7 @@ export function InvoiceEditForm({
           </div>
           </div>
         </div>
+        ) : null}
         </form>
       </div>
 

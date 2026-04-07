@@ -1250,9 +1250,14 @@ export function RetailersScreen({
                                         <p className="mt-0.5 text-xs text-zinc-500">
                                           {(inv.bill_date ?? "").slice(0, 10)}
                                         </p>
-                                        <p className="mt-1.5 font-mono text-sm font-medium tabular-nums text-teal-200">
-                                          {formatInr(Number(inv.total_amount ?? 0))}
-                                        </p>
+                                        <div className="mt-1.5 space-y-0.5">
+                                          <p className="font-mono text-sm font-medium tabular-nums text-teal-200">
+                                            Total: {formatInr(Number(inv.total_amount ?? 0))}
+                                          </p>
+                                          <p className="font-mono text-xs font-medium tabular-nums text-sky-200/90">
+                                            Transport: {formatInr(Number(inv.transportation_amount ?? 0))}
+                                          </p>
+                                        </div>
                                       </div>
                                       <div className="flex w-full shrink-0 gap-2 sm:w-auto">
                                         <button
