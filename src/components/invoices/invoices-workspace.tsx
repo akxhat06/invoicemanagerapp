@@ -72,6 +72,14 @@ function parseQuantityInput(s: string): number {
   return Math.min(n, 999_999);
 }
 
+function roundOffAmountInput(s: string): string {
+  const raw = String(s).replace(/,/g, "").trim();
+  if (!raw) return "";
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return s;
+  return String(Math.round(n));
+}
+
 function InvoiceDocGlyph({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -674,32 +682,52 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
         <label className={labelDark} htmlFor="inv-basic">
           Base amount <span className="text-red-400">*</span>
         </label>
-        <input
-          id="inv-basic"
-          inputMode="decimal"
-          value={basicAmount}
-          onChange={(e) => setBasicAmount(e.target.value)}
-          disabled={saving}
-          className={fieldClassDark()}
-          style={inputStyle}
-          placeholder="0.00"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            id="inv-basic"
+            inputMode="decimal"
+            value={basicAmount}
+            onChange={(e) => setBasicAmount(e.target.value)}
+            disabled={saving}
+            className={`${fieldClassDark()} flex-1`}
+            style={inputStyle}
+            placeholder="0.00"
+          />
+          <button
+            type="button"
+            onClick={() => setBasicAmount(roundOffAmountInput(basicAmount))}
+            disabled={saving || !basicAmount.trim()}
+            className="shrink-0 rounded-lg border border-zinc-700/70 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Round off
+          </button>
+        </div>
       </div>
 
       <div>
         <label className={labelDark} htmlFor="inv-gst-amt">
           GST amount <span className="text-red-400">*</span>
         </label>
-        <input
-          id="inv-gst-amt"
-          inputMode="decimal"
-          value={gstAmount}
-          onChange={(e) => setGstAmount(e.target.value)}
-          disabled={saving}
-          className={fieldClassDark()}
-          style={inputStyle}
-          placeholder="0.00"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            id="inv-gst-amt"
+            inputMode="decimal"
+            value={gstAmount}
+            onChange={(e) => setGstAmount(e.target.value)}
+            disabled={saving}
+            className={`${fieldClassDark()} flex-1`}
+            style={inputStyle}
+            placeholder="0.00"
+          />
+          <button
+            type="button"
+            onClick={() => setGstAmount(roundOffAmountInput(gstAmount))}
+            disabled={saving || !gstAmount.trim()}
+            className="shrink-0 rounded-lg border border-zinc-700/70 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Round off
+          </button>
+        </div>
       </div>
 
       <div>
@@ -770,16 +798,26 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
             <label className={labelDark} htmlFor="inv-tr-amt">
               Amount
             </label>
-            <input
-              id="inv-tr-amt"
-              inputMode="decimal"
-              value={transportAmount}
-              onChange={(e) => setTransportAmount(e.target.value)}
-              disabled={saving}
-              className={fieldClassDark()}
-              style={inputStyle}
-              placeholder="0.00"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                id="inv-tr-amt"
+                inputMode="decimal"
+                value={transportAmount}
+                onChange={(e) => setTransportAmount(e.target.value)}
+                disabled={saving}
+                className={`${fieldClassDark()} flex-1`}
+                style={inputStyle}
+                placeholder="0.00"
+              />
+              <button
+                type="button"
+                onClick={() => setTransportAmount(roundOffAmountInput(transportAmount))}
+                disabled={saving || !transportAmount.trim()}
+                className="shrink-0 rounded-lg border border-zinc-700/70 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Round off
+              </button>
+            </div>
           </div>
         </div>
       </div>
