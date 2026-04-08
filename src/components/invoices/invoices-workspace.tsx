@@ -38,6 +38,7 @@ type InvoicesUiSessionV1 = {
 
 const CANVAS = "#101014";
 const INPUT_BG = "#1E1E24";
+const PAN_PREFIX = "PAN:";
 
 function fieldClassDark(multiline = false) {
   return [
@@ -70,6 +71,14 @@ function parseQuantityInput(s: string): number {
   const n = parseInt(String(s).trim().replace(/\D/g, ""), 10);
   if (!Number.isFinite(n) || n < 1) return 0;
   return Math.min(n, 999_999);
+}
+
+function retailerGstForInvoice(v: string | null | undefined): string | null {
+  const tax = v?.trim() ?? "";
+  if (!tax) return null;
+  const upper = tax.toUpperCase();
+  if (upper.startsWith(PAN_PREFIX)) return null;
+  return tax;
 }
 
 function InvoiceDocGlyph({ className }: { className?: string }) {
@@ -482,7 +491,7 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
       retailer_name: retailer.name ?? "",
       retailer_address: retailer.address ?? "",
       contact_no: retailer.contact_no ?? "",
-      gst_no: company.gst_no?.trim() || retailer.gst_no?.trim() || null,
+      gst_no: company.gst_no?.trim() || retailerGstForInvoice(retailer.gst_no) || null,
       invoice_number: invoiceNumber.trim() || (dev ? "DEV-INV" : ""),
       bill_date: billDate || (dev ? todayISODate() : ""),
       basic_amount: dev && basic <= 0 ? 0.01 : basic,

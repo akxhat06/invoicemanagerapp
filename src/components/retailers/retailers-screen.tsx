@@ -36,12 +36,14 @@ type RetailersUiSessionV1 = {
     retailerTelephone: string;
     retailerPhone: string;
     retailerAltPhone: string;
+    retailerTaxIdType: "gst" | "pan";
     retailerGst: string;
   } | null;
 };
 
 const CANVAS = "#101014";
 const INPUT_BG = "#1E1E24";
+const PAN_PREFIX = "PAN:";
 
 function trimNull(s: string): string | null {
   const v = s.trim();
@@ -59,6 +61,20 @@ function phoneDigitsFromStored(phone: string | null | undefined): string {
 function toE164Contact(digits: string): string | null {
   const d = digits.replace(/\D/g, "").slice(0, 10);
   return d.length === 10 ? `+91${d}` : null;
+}
+
+function parseRetailerTaxId(raw: string | null | undefined): { type: "gst" | "pan"; value: string } {
+  const v = (raw ?? "").trim().toUpperCase();
+  if (!v) return { type: "gst", value: "" };
+  if (v.startsWith(PAN_PREFIX)) {
+    return { type: "pan", value: v.slice(PAN_PREFIX.length) };
+  }
+  return { type: "gst", value: v };
+}
+
+function toStoredRetailerTaxId(type: "gst" | "pan", value: string): string {
+  const clean = value.trim().toUpperCase();
+  return type === "pan" ? `${PAN_PREFIX}${clean}` : clean;
 }
 
 function fieldClassDark(multiline = false) {
@@ -186,6 +202,7 @@ export function RetailersScreen({
   const [retailerTelephone, setRetailerTelephone] = useState("");
   const [retailerPhone, setRetailerPhone] = useState("");
   const [retailerAltPhone, setRetailerAltPhone] = useState("");
+  const [retailerTaxIdType, setRetailerTaxIdType] = useState<"gst" | "pan">("gst");
   const [retailerGst, setRetailerGst] = useState("");
 
   const inputStyle = { backgroundColor: INPUT_BG } as CSSProperties;
@@ -259,6 +276,7 @@ export function RetailersScreen({
     setRetailerTelephone("");
     setRetailerPhone("");
     setRetailerAltPhone("");
+    setRetailerTaxIdType("gst");
     setRetailerGst("");
   }, []);
 
@@ -269,7 +287,9 @@ export function RetailersScreen({
     setRetailerTelephone(r.telephone ?? "");
     setRetailerPhone(phoneDigitsFromStored(r.contact_no));
     setRetailerAltPhone(phoneDigitsFromStored(r.alternative_phone));
-    setRetailerGst(r.gst_no ?? "");
+    const parsedTax = parseRetailerTaxId(r.gst_no);
+    setRetailerTaxIdType(parsedTax.type);
+    setRetailerGst(parsedTax.value);
   }, []);
 
   const applyRetailersUiSession = useCallback(
@@ -302,6 +322,7 @@ export function RetailersScreen({
           setRetailerTelephone(s.draft.retailerTelephone);
           setRetailerPhone(s.draft.retailerPhone);
           setRetailerAltPhone(s.draft.retailerAltPhone);
+          setRetailerTaxIdType(s.draft.retailerTaxIdType ?? "gst");
           setRetailerGst(s.draft.retailerGst);
         } else if (s.panel === "edit") {
           hydrateFromRetailer(r);
@@ -315,6 +336,7 @@ export function RetailersScreen({
           setRetailerTelephone(s.draft.retailerTelephone);
           setRetailerPhone(s.draft.retailerPhone);
           setRetailerAltPhone(s.draft.retailerAltPhone);
+          setRetailerTaxIdType(s.draft.retailerTaxIdType ?? "gst");
           setRetailerGst(s.draft.retailerGst);
         } else {
           resetForm();
@@ -346,6 +368,7 @@ export function RetailersScreen({
               retailerTelephone,
               retailerPhone,
               retailerAltPhone,
+              retailerTaxIdType,
               retailerGst,
             }
           : null,
@@ -362,6 +385,7 @@ export function RetailersScreen({
       retailerTelephone,
       retailerPhone,
       retailerAltPhone,
+      retailerTaxIdType,
       retailerGst,
     ],
   });
@@ -465,9 +489,20 @@ export function RetailersScreen({
       return false;
     }
     const g = retailerGst.trim().toUpperCase();
-    if (g.length !== 15) {
-      toastError("GST number must be 15 characters.");
-      return false;
+    if (retailerTaxIdType === "gst") {
+      if (g.length !== 15) {
+        toastError("GST number must be 15 characters.");
+        return false;
+      }
+    } else {
+      if (!g) {
+        toastError("Enter PAN number.");
+        return false;
+      }
+      if (g.length > 15) {
+        toastError("PAN number cannot exceed 15 characters.");
+        return false;
+      }
     }
     return true;
   }
@@ -484,12 +519,16 @@ export function RetailersScreen({
       telephone: trimNull(retailerTelephone),
       contact_no: phoneE164 ?? (dev ? "+919999999999" : ""),
       alternative_phone: altE164,
-      gst_no:
-        retailerGst.trim().toUpperCase().length === 15
-          ? retailerGst.trim().toUpperCase()
-          : dev
-            ? "29AAAAA0000A1Z5"
-            : "",
+      gst_no: (() => {
+        const clean = retailerGst.trim().toUpperCase();
+        if (retailerTaxIdType === "gst") {
+          return clean.length === 15 ? clean : dev ? "29AAAAA0000A1Z5" : "";
+        }
+        if (clean.length > 0 && clean.length <= 15) {
+          return toStoredRetailerTaxId("pan", clean);
+        }
+        return dev ? `${PAN_PREFIX}ABCDE1234F` : "";
+      })(),
     };
   }
 
@@ -780,18 +819,53 @@ export function RetailersScreen({
         </div>
       </div>
       <div>
+        <label htmlFor="r-tax-type" className={labelDark}>
+          Tax ID type <span className="text-red-400">*</span>
+        </label>
+        <div className="relative">
+          <select
+            id="r-tax-type"
+            value={retailerTaxIdType}
+            onChange={(e) => setRetailerTaxIdType(e.target.value === "pan" ? "pan" : "gst")}
+            disabled={saving}
+            className={`${fieldClassDark()} appearance-none pr-9`}
+            style={inputStyle}
+          >
+            <option value="gst">GST</option>
+            <option value="pan">PAN</option>
+          </select>
+          <svg
+            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+          </svg>
+        </div>
+      </div>
+      <div>
         <label htmlFor="r-gst" className={labelDark}>
-          GST no. <span className="text-red-400">*</span>
+          {retailerTaxIdType === "gst" ? "GST no." : "PAN no."} <span className="text-red-400">*</span>
         </label>
         <input
           id="r-gst"
           type="text"
           value={retailerGst}
-          onChange={(e) => setRetailerGst(e.target.value.toUpperCase())}
+          onChange={(e) =>
+            setRetailerGst(
+              e.target.value
+                .toUpperCase()
+                .replace(/\s/g, "")
+                .slice(0, 15)
+            )
+          }
           disabled={saving}
           className={`${fieldClassDark()} font-mono uppercase`}
           style={inputStyle}
-          placeholder="15-character GSTIN"
+          placeholder={retailerTaxIdType === "gst" ? "15-character GSTIN" : "PAN (max 15 characters)"}
           maxLength={15}
         />
       </div>
@@ -1159,7 +1233,11 @@ export function RetailersScreen({
                             }
                             mono
                           />
-                          <ViewRow label="GST no." value={selected.gst_no ?? ""} mono />
+                          <ViewRow
+                            label={parseRetailerTaxId(selected.gst_no).type === "pan" ? "PAN no." : "GST no."}
+                            value={parseRetailerTaxId(selected.gst_no).value}
+                            mono
+                          />
                         </div>
                       </ViewSectionCard>
                     </section>
