@@ -56,6 +56,15 @@ function parseQuantityInput(s: string): number {
   return Math.min(n, 999_999);
 }
 
+function computeCdAmount(invoiceAmount: number, cdAmount: string, cdPercent: string): number {
+  const amount = Math.max(0, round2(toNum(cdAmount)));
+  const percent = Math.max(0, Math.min(100, round2(toNum(cdPercent))));
+  const fromPercent = round2((invoiceAmount * percent) / 100);
+  // If both are entered, amount takes priority.
+  const effective = amount > 0 ? amount : fromPercent;
+  return round2(Math.max(0, effective));
+}
+
 function retailerGstForInvoice(v: string | null | undefined): string | null {
   const tax = v?.trim() ?? "";
   if (!tax) return null;
@@ -101,6 +110,8 @@ export function InvoiceEditForm({
   const [quantity, setQuantity] = useState("1");
   const [basicAmount, setBasicAmount] = useState("");
   const [gstAmount, setGstAmount] = useState("");
+  const [cdAmount, setCdAmount] = useState("");
+  const [cdPercent, setCdPercent] = useState("");
   const [transportName, setTransportName] = useState("");
   const [lrNo, setLrNo] = useState("");
   const [lrDate, setLrDate] = useState(todayISODate());
@@ -152,8 +163,11 @@ export function InvoiceEditForm({
       setQuantity(String(Math.max(1, Math.floor(Number(inv.quantity ?? 1)))));
       const basic = Number(inv.basic_amount ?? 0);
       const gstAmt = Number(inv.gst_amount ?? 0);
+      const cdAmt = Number(inv.cd_amount ?? 0);
       setBasicAmount(String(basic));
       setGstAmount(String(gstAmt));
+      setCdAmount(String(cdAmt));
+      setCdPercent("");
       const t = firstTransportForInvoice(tr, inv.id);
       if (t) {
         setTransportName(t.transport_name ?? "");
@@ -211,6 +225,20 @@ export function InvoiceEditForm({
       toastError("Enter GST amount (use 0 if exempt).");
       return false;
     }
+    const cdAmtRaw = toNum(cdAmount);
+    if (cdAmtRaw < 0) {
+      toastError("Cash discount amount cannot be negative.");
+      return false;
+    }
+    const cdPctRaw = toNum(cdPercent);
+    if (cdPctRaw < 0) {
+      toastError("Cash discount % cannot be negative.");
+      return false;
+    }
+    if (cdPctRaw > 100) {
+      toastError("Cash discount % cannot exceed 100.");
+      return false;
+    }
     return true;
   }
 
@@ -263,8 +291,9 @@ export function InvoiceEditForm({
     const basic = round2(toNum(basicAmount));
     const gstAmt = round2(toNum(gstAmount));
     const invAmt = Math.round(round2(basic + gstAmt));
+    const cdAmt = Math.min(invAmt, computeCdAmount(invAmt, cdAmount, cdPercent));
     const transportAmt = round2(toNum(transportAmount));
-    const total = round2(invAmt);
+    const total = round2(Math.max(0, invAmt - cdAmt));
     const paid = round2(paymentReceived);
     const outstanding = Math.max(0, round2(total - paid));
 
@@ -285,7 +314,7 @@ export function InvoiceEditForm({
       gst_amount: dev && gstAmt < 0 ? 0 : gstAmt,
       invoice_amount: dev && invAmt <= 0 ? 0.01 : invAmt,
       transportation_amount: Math.max(0, transportAmt),
-      cd_amount: 0,
+      cd_amount: Math.max(0, cdAmt),
       total_amount: total,
       payment_received: paid,
       outstanding_amount: outstanding,
@@ -358,6 +387,14 @@ export function InvoiceEditForm({
   const computedInvoiceAmountPreview = useMemo(
     () => Math.round(round2(toNum(basicAmount) + computedGstAmountPreview)),
     [basicAmount, computedGstAmountPreview]
+  );
+  const computedCdAmountPreview = useMemo(
+    () => Math.min(computedInvoiceAmountPreview, computeCdAmount(computedInvoiceAmountPreview, cdAmount, cdPercent)),
+    [computedInvoiceAmountPreview, cdAmount, cdPercent]
+  );
+  const computedNetAmountPreview = useMemo(
+    () => Math.max(0, round2(computedInvoiceAmountPreview - computedCdAmountPreview)),
+    [computedInvoiceAmountPreview, computedCdAmountPreview]
   );
 
   if (loadingRefs) {
@@ -551,6 +588,39 @@ export function InvoiceEditForm({
             />
           </div>
 
+          <div>
+            <label className={labelDark} htmlFor="inv-edit-cd-amt">
+              Cash discount amount
+            </label>
+            <input
+              id="inv-edit-cd-amt"
+              inputMode="decimal"
+              value={cdAmount}
+              onChange={(e) => setCdAmount(e.target.value)}
+              disabled={saving}
+              className={fieldClassDark()}
+              style={inputStyle}
+              placeholder="0.00"
+            />
+          </div>
+
+          <div>
+            <label className={labelDark} htmlFor="inv-edit-cd-pct">
+              Cash discount (%)
+            </label>
+            <input
+              id="inv-edit-cd-pct"
+              inputMode="decimal"
+              value={cdPercent}
+              onChange={(e) => setCdPercent(e.target.value)}
+              disabled={saving}
+              className={fieldClassDark()}
+              style={inputStyle}
+              placeholder="e.g. 2.5"
+            />
+            <p className="mt-1 text-[11px] text-zinc-500">If both amount and % are entered, amount is used.</p>
+          </div>
+
           <div className="rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-950/35 via-zinc-950/50 to-zinc-950 p-4 ring-1 ring-amber-500/10">
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-200/80">Live preview</p>
             <div className="mt-3 space-y-3">
@@ -565,7 +635,7 @@ export function InvoiceEditForm({
                 </div>
               </div>
               <div>
-                <label className={labelDark}>Invoice amount</label>
+                <label className={labelDark}>Invoice amount (before CD)</label>
                 <div
                   className={`${fieldClassDark()} border-amber-500/25 font-semibold text-amber-100`}
                   style={inputStyle}
@@ -573,7 +643,23 @@ export function InvoiceEditForm({
                 >
                   {formatInr(computedInvoiceAmountPreview)}
                 </div>
-                <p className="mt-1 text-[11px] text-zinc-500">Base + GST (saved on the invoice before transport).</p>
+              </div>
+              <div>
+                <label className={labelDark}>Cash discount amount</label>
+                <div className={`${fieldClassDark()} border-amber-500/15 text-zinc-200`} style={inputStyle} aria-live="polite">
+                  {formatInr(computedCdAmountPreview)}
+                </div>
+              </div>
+              <div>
+                <label className={labelDark}>Invoice amount (after CD)</label>
+                <div
+                  className={`${fieldClassDark()} border-amber-500/25 font-semibold text-amber-100`}
+                  style={inputStyle}
+                  aria-live="polite"
+                >
+                  {formatInr(computedNetAmountPreview)}
+                </div>
+                <p className="mt-1 text-[11px] text-zinc-500">Total bill is invoice amount after CD. Transport stays separate.</p>
               </div>
             </div>
           </div>
