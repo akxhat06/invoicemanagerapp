@@ -29,7 +29,7 @@ type InvoicesUiSessionV1 = {
   invoiceNumber: string;
   quantity: string;
   basicAmount: string;
-  gstAmount: string;
+  gstPercent: string;
   cdAmount: string;
   cdPercent: string;
   transportName: string;
@@ -75,10 +75,10 @@ function parseQuantityInput(s: string): number {
   return Math.min(n, 999_999);
 }
 
-function computeCdAmount(invoiceAmount: number, cdAmount: string, cdPercent: string): number {
+function computeCdAmount(basicAmount: number, cdAmount: string, cdPercent: string): number {
   const amount = Math.max(0, round2(toNum(cdAmount)));
   const percent = Math.max(0, Math.min(100, round2(toNum(cdPercent))));
-  const fromPercent = round2((invoiceAmount * percent) / 100);
+  const fromPercent = round2((basicAmount * percent) / 100);
   // If both are entered, amount takes priority.
   const effective = amount > 0 ? amount : fromPercent;
   return round2(Math.max(0, effective));
@@ -246,7 +246,7 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [basicAmount, setBasicAmount] = useState("");
-  const [gstAmount, setGstAmount] = useState("");
+  const [gstPercent, setGstPercent] = useState("");
   const [cdAmount, setCdAmount] = useState("");
   const [cdPercent, setCdPercent] = useState("");
   const [transportName, setTransportName] = useState("");
@@ -270,7 +270,7 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
     setInvoiceNumber("");
     setQuantity("1");
     setBasicAmount("");
-    setGstAmount("");
+    setGstPercent("");
     setCdAmount("");
     setCdPercent("");
     setTransportName("");
@@ -295,7 +295,7 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
       setInvoiceNumber(s.invoiceNumber ?? "");
       setQuantity(s.quantity ?? "1");
       setBasicAmount(s.basicAmount ?? "");
-      setGstAmount(s.gstAmount ?? "");
+      setGstPercent(s.gstPercent ?? "");
       setCdAmount(s.cdAmount ?? "");
       setCdPercent(s.cdPercent ?? "");
       setTransportName(s.transportName ?? "");
@@ -320,7 +320,7 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
       invoiceNumber,
       quantity,
       basicAmount,
-      gstAmount,
+      gstPercent,
       cdAmount,
       cdPercent,
       transportName,
@@ -338,7 +338,7 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
       invoiceNumber,
       quantity,
       basicAmount,
-      gstAmount,
+      gstPercent,
       cdAmount,
       cdPercent,
       transportName,
@@ -436,13 +436,13 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
       toastError("Enter base amount.");
       return false;
     }
-    const gst = toNum(gstAmount);
+    const gst = toNum(gstPercent);
     if (gst < 0) {
-      toastError("GST amount cannot be negative.");
+      toastError("GST % cannot be negative.");
       return false;
     }
-    if (!gstAmount.trim() && !skipRequiredFieldValidation()) {
-      toastError("Enter GST amount (use 0 if exempt).");
+    if (gst > 100) {
+      toastError("GST % cannot exceed 100.");
       return false;
     }
     const cdAmtRaw = toNum(cdAmount);
@@ -509,11 +509,13 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
   ) {
     const dev = skipRequiredFieldValidation();
     const basic = round2(toNum(basicAmount));
-    const gstAmt = round2(toNum(gstAmount));
-    const invAmt = Math.round(round2(basic + gstAmt));
-    const cdAmt = Math.min(invAmt, computeCdAmount(invAmt, cdAmount, cdPercent));
+    const cdAmt = Math.min(basic, computeCdAmount(basic, cdAmount, cdPercent));
+    const discountedBase = Math.max(0, round2(basic - cdAmt));
+    const gstPct = Math.max(0, Math.min(100, round2(toNum(gstPercent))));
+    const gstAmt = round2((discountedBase * gstPct) / 100);
+    const invAmt = Math.round(round2(discountedBase + gstAmt));
     const transportAmt = round2(toNum(transportAmount));
-    const total = round2(Math.max(0, invAmt - cdAmt));
+    const total = round2(invAmt);
     const paid = round2(paymentReceived);
     const outstanding = Math.max(0, round2(total - paid));
 
@@ -614,20 +616,56 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
     };
   }, [sortedInvoices]);
 
-  const computedGstAmountPreview = useMemo(() => round2(toNum(gstAmount)), [gstAmount]);
-
-  const computedInvoiceAmountPreview = useMemo(
-    () => Math.round(round2(toNum(basicAmount) + computedGstAmountPreview)),
-    [basicAmount, computedGstAmountPreview]
-  );
+  const computedBasicAmountPreview = useMemo(() => round2(toNum(basicAmount)), [basicAmount]);
   const computedCdAmountPreview = useMemo(
-    () => Math.min(computedInvoiceAmountPreview, computeCdAmount(computedInvoiceAmountPreview, cdAmount, cdPercent)),
-    [computedInvoiceAmountPreview, cdAmount, cdPercent]
+    () => Math.min(computedBasicAmountPreview, computeCdAmount(computedBasicAmountPreview, cdAmount, cdPercent)),
+    [computedBasicAmountPreview, cdAmount, cdPercent]
   );
-  const computedNetAmountPreview = useMemo(
-    () => Math.max(0, round2(computedInvoiceAmountPreview - computedCdAmountPreview)),
-    [computedInvoiceAmountPreview, computedCdAmountPreview]
+  const computedTaxableBasePreview = useMemo(
+    () => Math.max(0, round2(computedBasicAmountPreview - computedCdAmountPreview)),
+    [computedBasicAmountPreview, computedCdAmountPreview]
   );
+  const computedGstAmountPreview = useMemo(() => {
+    const pct = Math.max(0, Math.min(100, round2(toNum(gstPercent))));
+    return round2((computedTaxableBasePreview * pct) / 100);
+  }, [gstPercent, computedTaxableBasePreview]);
+  const computedInvoiceAmountPreview = useMemo(
+    () => Math.round(round2(computedTaxableBasePreview + computedGstAmountPreview)),
+    [computedTaxableBasePreview, computedGstAmountPreview]
+  );
+
+  function syncCdFromAmount(nextAmount: string, baseRaw: string = basicAmount) {
+    setCdAmount(nextAmount);
+    const base = round2(toNum(baseRaw));
+    const amt = Math.max(0, round2(toNum(nextAmount)));
+    if (base > 0 && amt > 0) {
+      setCdPercent(String(round2((amt / base) * 100)));
+      return;
+    }
+    if (!nextAmount.trim()) setCdPercent("");
+  }
+
+  function syncCdFromPercent(nextPercent: string, baseRaw: string = basicAmount) {
+    setCdPercent(nextPercent);
+    const base = round2(toNum(baseRaw));
+    const pct = Math.max(0, Math.min(100, round2(toNum(nextPercent))));
+    if (base > 0 && pct > 0) {
+      setCdAmount(String(round2((base * pct) / 100)));
+      return;
+    }
+    if (!nextPercent.trim()) setCdAmount("");
+  }
+
+  function handleBasicAmountChange(nextBasic: string) {
+    setBasicAmount(nextBasic);
+    if (cdAmount.trim()) {
+      syncCdFromAmount(cdAmount, nextBasic);
+      return;
+    }
+    if (cdPercent.trim()) {
+      syncCdFromPercent(cdPercent, nextBasic);
+    }
+  }
 
   const invoiceFormStep = (
     <div className="space-y-4">
@@ -743,7 +781,7 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
           id="inv-basic"
           inputMode="decimal"
           value={basicAmount}
-          onChange={(e) => setBasicAmount(e.target.value)}
+          onChange={(e) => handleBasicAmountChange(e.target.value)}
           disabled={saving}
           className={fieldClassDark()}
           style={inputStyle}
@@ -752,18 +790,18 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
       </div>
 
       <div>
-        <label className={labelDark} htmlFor="inv-gst-amt">
-          GST amount <span className="text-red-400">*</span>
+        <label className={labelDark} htmlFor="inv-gst-pct">
+          GST (%) 
         </label>
         <input
-          id="inv-gst-amt"
+          id="inv-gst-pct"
           inputMode="decimal"
-          value={gstAmount}
-          onChange={(e) => setGstAmount(e.target.value)}
+          value={gstPercent}
+          onChange={(e) => setGstPercent(e.target.value)}
           disabled={saving}
           className={fieldClassDark()}
           style={inputStyle}
-          placeholder="0.00"
+          placeholder="e.g. 18"
         />
       </div>
 
@@ -775,7 +813,7 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
           id="inv-cd-amt"
           inputMode="decimal"
           value={cdAmount}
-          onChange={(e) => setCdAmount(e.target.value)}
+          onChange={(e) => syncCdFromAmount(e.target.value)}
           disabled={saving}
           className={fieldClassDark()}
           style={inputStyle}
@@ -791,20 +829,13 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
           id="inv-cd-pct"
           inputMode="decimal"
           value={cdPercent}
-          onChange={(e) => setCdPercent(e.target.value)}
+          onChange={(e) => syncCdFromPercent(e.target.value)}
           disabled={saving}
           className={fieldClassDark()}
           style={inputStyle}
           placeholder="e.g. 2.5"
         />
         <p className="mt-1 text-[11px] text-zinc-500">If both amount and % are entered, amount is used.</p>
-      </div>
-
-      <div>
-        <label className={labelDark}>Invoice amount (before CD)</label>
-        <div className={`${fieldClassDark()} font-medium text-white`} style={inputStyle} aria-live="polite">
-          {formatInr(computedInvoiceAmountPreview)}
-        </div>
       </div>
 
       <div>
@@ -815,11 +846,25 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
       </div>
 
       <div>
-        <label className={labelDark}>Invoice amount (after CD)</label>
-        <div className={`${fieldClassDark()} font-medium text-white`} style={inputStyle} aria-live="polite">
-          {formatInr(computedNetAmountPreview)}
+        <label className={labelDark}>Taxable amount (Base - CD)</label>
+        <div className={`${fieldClassDark()} text-zinc-300`} style={inputStyle} aria-live="polite">
+          {formatInr(computedTaxableBasePreview)}
         </div>
-        <p className="mt-1 text-[11px] text-zinc-500">Total bill is invoice amount after CD. Transport stays separate.</p>
+      </div>
+
+      <div>
+        <label className={labelDark}>GST amount</label>
+        <div className={`${fieldClassDark()} text-zinc-300`} style={inputStyle} aria-live="polite">
+          {formatInr(computedGstAmountPreview)}
+        </div>
+      </div>
+
+      <div>
+        <label className={labelDark}>Invoice amount</label>
+        <div className={`${fieldClassDark()} font-medium text-white`} style={inputStyle} aria-live="polite">
+          {formatInr(computedInvoiceAmountPreview)}
+        </div>
+        <p className="mt-1 text-[11px] text-zinc-500">Calculated as Basic amount - CD + GST. Transport stays separate.</p>
       </div>
     </div>
   );
