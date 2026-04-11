@@ -37,6 +37,7 @@ export default async function DashboardHomePage() {
     invThisRes,
     invLastRes,
     invBilledSumRes,
+    paymentsSumRes,
   ] = await Promise.all([
     supabase.from("companies").select("id", { count: "exact", head: true }),
     supabase.from("companies").select("id", { count: "exact", head: true }).or("is_draft.eq.false,is_draft.is.null"),
@@ -55,8 +56,9 @@ export default async function DashboardHomePage() {
       .lte("bill_date", lastMonth.last),
     supabase
       .from("retailer_invoices")
-      .select("total_amount, payment_received")
+      .select("id, total_amount")
       .or("is_draft.eq.false,is_draft.is.null"),
+    supabase.from("invoice_payments").select("amount, invoice_id"),
   ]);
 
   const err =
@@ -67,7 +69,8 @@ export default async function DashboardHomePage() {
     invRes.error ||
     invThisRes.error ||
     invLastRes.error ||
-    invBilledSumRes.error;
+    invBilledSumRes.error ||
+    paymentsSumRes.error;
 
   if (err) {
     return (
@@ -93,17 +96,31 @@ export default async function DashboardHomePage() {
   }
 
   /** Sum in JS — PostgREST aggregate (e.g. total_amount.sum()) is disabled on this project. */
+  const nonDraftInvoiceIds = new Set<string>();
   let companiesTotalBilledSafe = 0;
-  let totalPaymentReceived = 0;
   for (const row of invBilledSumRes.data ?? []) {
-    const r = row as { total_amount?: number | string | null; payment_received?: number | string | null };
+    const r = row as { id?: string | null; total_amount?: number | string | null };
+    if (r.id) nonDraftInvoiceIds.add(r.id);
     const ta = r.total_amount;
-    const pr = r.payment_received;
     const totalN = ta === null || ta === undefined ? 0 : typeof ta === "string" ? parseFloat(ta) : Number(ta);
-    const paidN = pr === null || pr === undefined ? 0 : typeof pr === "string" ? parseFloat(pr) : Number(pr);
     companiesTotalBilledSafe += Number.isFinite(totalN) ? totalN : 0;
-    totalPaymentReceived += Number.isFinite(paidN) ? paidN : 0;
   }
+
+  /**
+   * Total payment must come from `invoice_payments`, not `retailer_invoices.payment_received`.
+   * The denormalized column can drift (e.g. after credit notes or legacy saves); summing rows matches reality.
+   * Only count payments linked to non-draft invoices (same scope as before).
+   */
+  let totalPaymentReceived = 0;
+  for (const row of paymentsSumRes.data ?? []) {
+    const r = row as { amount?: number | string | null; invoice_id?: string | null };
+    if (!r.invoice_id || !nonDraftInvoiceIds.has(r.invoice_id)) continue;
+    const raw = r.amount;
+    const n =
+      raw === null || raw === undefined ? 0 : typeof raw === "string" ? parseFloat(raw.replace(/,/g, "")) : Number(raw);
+    totalPaymentReceived += Number.isFinite(n) ? n : 0;
+  }
+  totalPaymentReceived = Math.round(totalPaymentReceived * 100) / 100;
 
   return (
     <DashboardHomeView

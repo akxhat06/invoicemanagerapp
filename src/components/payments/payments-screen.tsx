@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { skipRequiredFieldValidation } from "@/lib/dev-validation";
+import { netInvoiceTotalAfterReturns } from "@/lib/invoice-net-after-returns";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { InvoicePaymentRow, RetailerInvoiceRow } from "@/types/invoice";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -198,15 +199,18 @@ export function PaymentsScreen({
       return toastError(error.message);
     }
 
-    // Keep invoice summary fields in sync for list cards.
-    const [sumRes, invRes] = await Promise.all([
+    // Keep invoice summary fields in sync for list cards (outstanding vs net bill after returns).
+    const [sumRes, invRes, retRes] = await Promise.all([
       supabase.from("invoice_payments").select("amount").eq("invoice_id", invId),
       supabase.from("retailer_invoices").select("total_amount").eq("id", invId).single(),
+      supabase.from("invoice_goods_returns").select("amount").eq("invoice_id", invId),
     ]);
-    if (!sumRes.error && !invRes.error && invRes.data) {
-      const paid = (sumRes.data ?? []).reduce((a, r) => a + Number(r.amount || 0), 0);
-      const total = Number(invRes.data.total_amount || 0);
-      const outstanding = Math.max(0, total - paid);
+    if (!sumRes.error && !invRes.error && invRes.data && !retRes.error) {
+      const paid = round2((sumRes.data ?? []).reduce((a, r) => a + Number(r.amount || 0), 0));
+      const gross = round2(Number(invRes.data.total_amount || 0));
+      const returnsSum = round2((retRes.data ?? []).reduce((a, r) => a + Number(r.amount || 0), 0));
+      const netTotal = netInvoiceTotalAfterReturns(gross, returnsSum);
+      const outstanding = Math.max(0, round2(netTotal - paid));
       await supabase
         .from("retailer_invoices")
         .update({

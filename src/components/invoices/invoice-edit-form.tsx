@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableDropdown, type SearchableDropdownOption } from "@/components/ui/searchable-dropdown";
 import { skipRequiredFieldValidation } from "@/lib/dev-validation";
+import { netInvoiceTotalAfterReturns } from "@/lib/invoice-net-after-returns";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
 import type {
@@ -185,6 +186,8 @@ export function InvoiceEditForm({
   const [payUpiRefNo, setPayUpiRefNo] = useState("");
   const [payNeftUtrNo, setPayNeftUtrNo] = useState("");
   const [payNote, setPayNote] = useState("");
+  /** Sum of `invoice_goods_returns.amount` for this invoice (loaded with the Payment tab). */
+  const [paymentReturnsLoadedSum, setPaymentReturnsLoadedSum] = useState(0);
 
   /** Avoid full-screen credit loading (and unmounting fields) when revisiting the Credit tab for the same invoice. */
   const creditListLoadedForInvoiceRef = useRef<string | null>(null);
@@ -207,22 +210,44 @@ export function InvoiceEditForm({
 
   const payDraftAmount = useMemo(() => round2(toNum(paymentAmount)), [paymentAmount]);
 
-  const invoiceTotalForPayment = useMemo(() => round2(Number(invoice.total_amount ?? 0)), [invoice.total_amount]);
+  const grossInvoiceTotal = useMemo(() => round2(Number(invoice.total_amount ?? 0)), [invoice.total_amount]);
 
-  /** Paid total if you save the amount currently in the form (other rows + this line). */
-  const payTotalAsInForm = useMemo(
+  const netBillForPayment = useMemo(
+    () => netInvoiceTotalAfterReturns(grossInvoiceTotal, paymentReturnsLoadedSum),
+    [grossInvoiceTotal, paymentReturnsLoadedSum]
+  );
+
+  /** Total paid if the current form line were saved (all rows, with draft replacing the edited row). */
+  const payTotalIfSaved = useMemo(
     () => round2(paymentOtherTotal + payDraftAmount),
     [paymentOtherTotal, payDraftAmount]
   );
 
+  /**
+   * Shown as "Paid": saved payment rows only. While adding a new line, the amount in the form is a suggestion, not paid yet.
+   * While editing an existing row, include the draft so the summary matches what saving would record.
+   */
+  const paidShownInSummary = useMemo(() => {
+    if (paymentEditingId != null) {
+      return payTotalIfSaved;
+    }
+    return paymentOtherTotal;
+  }, [paymentEditingId, payTotalIfSaved, paymentOtherTotal]);
+
   const payOutstandingRemaining = useMemo(
-    () => Math.max(0, round2(invoiceTotalForPayment - payTotalAsInForm)),
-    [invoiceTotalForPayment, payTotalAsInForm]
+    () => Math.max(0, round2(netBillForPayment - paidShownInSummary)),
+    [netBillForPayment, paidShownInSummary]
   );
 
+  const outstandingIfDraftSavedNewLine = useMemo(() => {
+    if (paymentEditingId != null) return null;
+    if (payDraftAmount <= 0) return null;
+    return Math.max(0, round2(netBillForPayment - payTotalIfSaved));
+  }, [paymentEditingId, payDraftAmount, netBillForPayment, payTotalIfSaved]);
+
   const payExceedsBill = useMemo(
-    () => payTotalAsInForm > invoiceTotalForPayment + 0.005,
-    [payTotalAsInForm, invoiceTotalForPayment]
+    () => payTotalIfSaved > netBillForPayment + 0.005,
+    [payTotalIfSaved, netBillForPayment]
   );
 
   useEffect(() => {
@@ -396,9 +421,14 @@ export function InvoiceEditForm({
   }, []);
 
   useEffect(() => {
+    setPaymentReturnsLoadedSum(0);
+  }, [invoice.id]);
+
+  useEffect(() => {
     if (activeTab !== "payment") return;
     let cancelled = false;
     const invoiceId = invoice.id;
+    const gross = round2(Number(invoice.total_amount ?? 0));
     const needsBlockingSpinner = paymentListLoadedForInvoiceRef.current !== invoiceId;
     if (needsBlockingSpinner) {
       setLoadingPayments(true);
@@ -407,35 +437,55 @@ export function InvoiceEditForm({
     }
     void (async () => {
       const supabase = createClient();
-      const { data, error } = await supabase
-        .from("invoice_payments")
-        .select("*")
-        .eq("invoice_id", invoiceId)
-        .order("payment_date", { ascending: false });
+      const [payRes, retRes] = await Promise.all([
+        supabase
+          .from("invoice_payments")
+          .select("*")
+          .eq("invoice_id", invoiceId)
+          .order("payment_date", { ascending: false }),
+        supabase.from("invoice_goods_returns").select("amount").eq("invoice_id", invoiceId),
+      ]);
       if (cancelled) return;
-      if (error) {
+      if (payRes.error) {
         if (needsBlockingSpinner) setLoadingPayments(false);
-        toastError(error.message);
+        toastError(payRes.error.message);
         return;
       }
-      const rows = (data ?? []) as InvoicePaymentRow[];
+      if (retRes.error) {
+        if (needsBlockingSpinner) setLoadingPayments(false);
+        toastError(retRes.error.message);
+        return;
+      }
+      const returnsSum = round2(
+        (retRes.data ?? []).reduce((a, r) => a + coerceGoodsReturnAmountFromDb(r.amount), 0)
+      );
+      const netBill = netInvoiceTotalAfterReturns(gross, returnsSum);
+      setPaymentReturnsLoadedSum(returnsSum);
+
+      const rows = (payRes.data ?? []) as InvoicePaymentRow[];
       setInvoicePayments(rows);
+
       if (needsBlockingSpinner) {
         setLoadingPayments(false);
         paymentListLoadedForInvoiceRef.current = invoiceId;
-        if (rows.length >= 1) {
+      }
+
+      const recordedPaid = round2(rows.reduce((a, p) => a + coerceGoodsReturnAmountFromDb(p.amount), 0));
+      const suggestedNext = Math.max(0, round2(netBill - recordedPaid));
+
+      if (rows.length >= 1) {
+        if (needsBlockingSpinner) {
           startEditPayment(rows[0]);
-        } else {
-          setPaymentEditingId(null);
-          const out = round2(Number(invoice.outstanding_amount ?? 0));
-          setPaymentAmount(out > 0 ? String(out) : "");
         }
+      } else {
+        setPaymentEditingId(null);
+        setPaymentAmount(suggestedNext > 0 ? String(suggestedNext) : "");
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [activeTab, invoice.id, resetPaymentToNew, startEditPayment]);
+  }, [activeTab, invoice.id, invoice.total_amount, resetPaymentToNew, startEditPayment]);
 
   async function saveCreditNoteInline(e?: FormEvent) {
     e?.preventDefault();
@@ -562,9 +612,10 @@ export function InvoiceEditForm({
     }
 
     const invId = invoice.id;
-    const [sumRes, invRes] = await Promise.all([
+    const [sumRes, invRes, retRes] = await Promise.all([
       supabase.from("invoice_payments").select("amount").eq("invoice_id", invId),
       supabase.from("retailer_invoices").select("total_amount").eq("id", invId).single(),
+      supabase.from("invoice_goods_returns").select("amount").eq("invoice_id", invId),
     ]);
 
     const savedRow = data as InvoicePaymentRow;
@@ -575,10 +626,13 @@ export function InvoiceEditForm({
     toastSuccess(paymentEditingId ? "Payment updated." : "Payment saved.");
     startEditPayment(savedRow);
 
-    if (!sumRes.error && !invRes.error && invRes.data) {
-      const paid = round2((sumRes.data ?? []).reduce((a, r) => a + Number(r.amount || 0), 0));
-      const total = Number(invRes.data.total_amount || 0);
-      const outstanding = Math.max(0, round2(total - paid));
+    if (!sumRes.error && !invRes.error && invRes.data && !retRes.error) {
+      const paid = round2((sumRes.data ?? []).reduce((a, r) => a + coerceGoodsReturnAmountFromDb(r.amount), 0));
+      const gross = round2(Number(invRes.data.total_amount || 0));
+      const returnsSum = round2((retRes.data ?? []).reduce((a, r) => a + coerceGoodsReturnAmountFromDb(r.amount), 0));
+      const netTotal = netInvoiceTotalAfterReturns(gross, returnsSum);
+      setPaymentReturnsLoadedSum(returnsSum);
+      const outstanding = Math.max(0, round2(netTotal - paid));
       await supabase
         .from("retailer_invoices")
         .update({
@@ -1359,16 +1413,28 @@ export function InvoiceEditForm({
                 <div className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-4 ring-1 ring-emerald-500/10">
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-zinc-500">Invoice total (bill)</span>
-                      <span className="font-mono font-semibold tabular-nums text-zinc-100">{formatInr(invoiceTotalForPayment)}</span>
+                      <span className="text-zinc-500">Net bill (after returns)</span>
+                      <span className="font-mono font-semibold tabular-nums text-zinc-100">{formatInr(netBillForPayment)}</span>
                     </div>
+                    {paymentReturnsLoadedSum > 0.005 ? (
+                      <p className="text-[10px] leading-snug text-zinc-600">
+                        Gross bill {formatInr(grossInvoiceTotal)} · Credit notes −{formatInr(paymentReturnsLoadedSum)}
+                      </p>
+                    ) : null}
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-zinc-500">Paid</span>
-                      <span className="font-mono tabular-nums text-emerald-200/95">{formatInr(payTotalAsInForm)}</span>
+                      <span className="text-zinc-500">Paid (saved)</span>
+                      <span className="font-mono tabular-nums text-emerald-200/95">{formatInr(paidShownInSummary)}</span>
                     </div>
                     <p className="text-[10px] leading-snug text-zinc-600">
-                      Includes the payment amount below (updates as you type).
+                      {paymentEditingId
+                        ? "Includes the payment line below (updates as you type)."
+                        : "Only payments you have saved are counted here. The amount field is a suggestion until you save."}
                     </p>
+                    {outstandingIfDraftSavedNewLine != null ? (
+                      <p className="text-[10px] leading-snug text-zinc-500">
+                        If you save the amount below, outstanding would be {formatInr(outstandingIfDraftSavedNewLine)}.
+                      </p>
+                    ) : null}
                     <div className="flex items-center justify-between gap-3 border-t border-zinc-700/50 pt-2">
                       <span className="text-zinc-500">Outstanding</span>
                       <span className="font-mono font-semibold tabular-nums text-zinc-100">{formatInr(payOutstandingRemaining)}</span>

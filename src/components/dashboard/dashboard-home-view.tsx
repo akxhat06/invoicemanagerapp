@@ -57,7 +57,7 @@ export type DashboardHomeViewProps = {
   companyCount: number;
   /** Sum of invoice total_amount (non-draft) across all companies. */
   companiesTotalBilled: number;
-  /** Sum of payment_received on non-draft invoices. */
+  /** Sum of `invoice_payments.amount` for non-draft invoices (not denormalized `payment_received`). */
   totalPaymentReceived: number;
   activeCompaniesCount: number;
   retailerCount: number;
