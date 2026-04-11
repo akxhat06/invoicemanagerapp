@@ -23,12 +23,11 @@ type Props = {
   initialInvoices: RetailerInvoiceRow[];
 };
 
-type PanelMode = "closed" | "add" | "edit";
+type PanelMode = "closed" | "add";
 
-type CreditNotesUiSessionV2 = {
-  v: 2;
+type CreditNotesUiSessionV3 = {
+  v: 3;
   panel: PanelMode;
-  editingId: string | null;
   invoiceId: string;
   creditDate: string;
   qtyToReturn: string;
@@ -96,7 +95,6 @@ export function CreditNotesWorkspace({ initialReturns, initialInvoices }: Props)
   const isAnimatingClose = useRef(false);
   const [saving, setSaving] = useState(false);
 
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [invoiceId, setInvoiceId] = useState("");
   const [creditDate, setCreditDate] = useState(todayISODate());
   const [qtyToReturn, setQtyToReturn] = useState("1");
@@ -126,7 +124,6 @@ export function CreditNotesWorkspace({ initialReturns, initialInvoices }: Props)
   const invoiceQty = selectedInvoice ? invoiceLineQty(selectedInvoice) : null;
 
   const resetForm = useCallback(() => {
-    setEditingId(null);
     setInvoiceId("");
     setCreditDate(todayISODate());
     setQtyToReturn("1");
@@ -134,42 +131,37 @@ export function CreditNotesWorkspace({ initialReturns, initialInvoices }: Props)
   }, []);
 
   const applyCreditNotesUiSession = useCallback(
-    (s: CreditNotesUiSessionV2) => {
+    (s: CreditNotesUiSessionV3) => {
       skipResetOnOpenAddRef.current = false;
-      setPanel("closed");
       if (s.panel === "closed") {
-        resetForm();
-        return;
-      }
-      if (s.panel === "edit") {
+        setPanel("closed");
         resetForm();
         return;
       }
       skipResetOnOpenAddRef.current = true;
-      setEditingId(null);
       setInvoiceId(s.invoiceId ?? "");
       setCreditDate(s.creditDate || todayISODate());
       setQtyToReturn(s.qtyToReturn ?? "1");
       setGoodsReturnAmount(s.goodsReturnAmount ?? "");
+      setPanel("add");
     },
     [resetForm]
   );
 
-  useWorkspaceUiSession<CreditNotesUiSessionV2>({
+  useWorkspaceUiSession<CreditNotesUiSessionV3>({
     route: "credit-notes",
-    version: 2,
+    version: 3,
     restoreReady: true,
     buildSnapshot: () => ({
-      v: 2,
+      v: 3,
       panel,
-      editingId,
       invoiceId,
       creditDate,
       qtyToReturn,
       goodsReturnAmount,
     }),
     applyRestore: applyCreditNotesUiSession,
-    saveDeps: [panel, editingId, invoiceId, creditDate, qtyToReturn, goodsReturnAmount],
+    saveDeps: [panel, invoiceId, creditDate, qtyToReturn, goodsReturnAmount],
   });
 
   const finalizeClose = useCallback(() => {
@@ -239,17 +231,6 @@ export function CreditNotesWorkspace({ initialReturns, initialInvoices }: Props)
     setPanel("add");
   };
 
-  function openEdit(row: InvoiceGoodsReturnRow) {
-    const inv = invoiceById.get(row.invoice_id);
-    const iq = inv ? invoiceLineQty(inv) : 1;
-    setEditingId(row.id);
-    setInvoiceId(row.invoice_id);
-    setCreditDate((row.return_date || todayISODate()).slice(0, 10));
-    setQtyToReturn(String(Math.max(1, Math.min(iq, Math.floor(Number(row.quantity_returned ?? 1))))));
-    setGoodsReturnAmount(String(roundGoodsReturnAmount(Number(row.amount ?? 0))));
-    setPanel("edit");
-  }
-
   async function saveCreditNote() {
     let invId = invoiceId;
     if (!invId && skipRequiredFieldValidation() && invoices[0]) {
@@ -314,10 +295,7 @@ export function CreditNotesWorkspace({ initialReturns, initialInvoices }: Props)
       note: null as string | null,
     };
 
-    const query = editingId
-      ? supabase.from("invoice_goods_returns").update(payload).eq("id", editingId).eq("user_id", user.id)
-      : supabase.from("invoice_goods_returns").insert(payload);
-    const { data, error } = await query.select().single();
+    const { data, error } = await supabase.from("invoice_goods_returns").insert(payload).select().single();
 
     if (error) {
       setSaving(false);
@@ -329,14 +307,10 @@ export function CreditNotesWorkspace({ initialReturns, initialInvoices }: Props)
       return toastError(error.message);
     }
 
-    setReturns((prev) =>
-      editingId
-        ? prev.map((r) => (r.id === editingId ? (data as InvoiceGoodsReturnRow) : r))
-        : [data as InvoiceGoodsReturnRow, ...prev]
-    );
+    setReturns((prev) => [data as InvoiceGoodsReturnRow, ...prev]);
     setSaving(false);
     requestClose();
-    toastSuccess(editingId ? "Credit Note updated." : "Credit Note saved.");
+    toastSuccess("Credit note saved.");
     router.refresh();
   }
 
@@ -358,7 +332,7 @@ export function CreditNotesWorkspace({ initialReturns, initialInvoices }: Props)
     return { count: returns.length, sum };
   }, [returns]);
 
-  const panelTitle = panel === "edit" ? "Edit credit note" : "Add credit note";
+  const panelTitle = "Add credit note";
 
   return (
     <div
@@ -373,7 +347,7 @@ export function CreditNotesWorkspace({ initialReturns, initialInvoices }: Props)
               <h2 className="font-login-serif text-xl font-semibold tracking-tight text-white sm:text-2xl">Credit notes</h2>
             </div>
             <p className="max-w-md text-sm leading-relaxed text-zinc-400">
-              Record returns against invoices—same add flow as invoices (tap +). Amounts round to two decimals when saved.
+              Add new credit notes here (tap +). To change an existing credit note, open the company or retailer, edit the invoice, and use the Credit tab.
             </p>
           </div>
           {sortedReturns.length > 0 && invoices.length > 0 ? (
@@ -431,18 +405,11 @@ export function CreditNotesWorkspace({ initialReturns, initialInvoices }: Props)
                         Qty returned {qr}
                       </p>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-2">
+                    <div className="flex shrink-0 flex-col items-end gap-1">
                       <span className="font-mono text-sm font-semibold tabular-nums tracking-tight text-amber-200 sm:text-[15px]">
                         {formatInr(amt)}
                       </span>
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Return</span>
-                      <button
-                        type="button"
-                        onClick={() => openEdit(r)}
-                        className="rounded-lg border border-zinc-600/60 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-100 transition hover:border-zinc-500 hover:bg-zinc-800"
-                      >
-                        Edit
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -539,13 +506,10 @@ export function CreditNotesWorkspace({ initialReturns, initialInvoices }: Props)
                     options={invoiceSelectOptions}
                     placeholder="Select invoice number"
                     searchPlaceholder="Search invoice…"
-                    disabled={saving || panel === "edit"}
+                    disabled={saving}
                     inputBackground={INPUT_BG}
                     menuZIndex={400}
                   />
-                  {panel === "edit" && (
-                    <p className="mt-1.5 text-xs text-zinc-500">Invoice cannot be changed when editing.</p>
-                  )}
                 </div>
 
                 <div>
@@ -624,7 +588,7 @@ export function CreditNotesWorkspace({ initialReturns, initialInvoices }: Props)
                   disabled={saving}
                   className="min-h-[48px] flex-[1.15] rounded-xl bg-gradient-to-br from-amber-200 to-amber-100 py-3 text-sm font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition hover:from-amber-100 hover:to-amber-50 disabled:opacity-50"
                 >
-                  {saving ? "Saving…" : panel === "edit" ? "Save changes" : "Save credit note"}
+                  {saving ? "Saving…" : "Save credit note"}
                 </button>
               </div>
             </div>

@@ -6,9 +6,33 @@ import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
-import type { InvoiceTransportRow, RetailerInvoiceRow } from "@/types/invoice";
+import type { InvoiceGoodsReturnRow, InvoiceTransportRow, RetailerInvoiceRow } from "@/types/invoice";
 import type { RetailerRow } from "@/types/retailer";
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+
+function roundGoodsReturnAmount(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/** PostgREST / Postgres numeric may arrive as string; normalize for the form. */
+function coerceGoodsReturnAmountFromDb(v: unknown): number {
+  if (v == null) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const n = parseFloat(String(v).replace(/,/g, "").trim());
+  return Number.isFinite(n) ? n : 0;
+}
+
+function quantityReturnedFromRow(row: InvoiceGoodsReturnRow, maxQty: number): number {
+  if (row.quantity_returned == null) return Math.min(maxQty, 1);
+  const n = Math.floor(Number(row.quantity_returned));
+  const q = Number.isFinite(n) && n >= 1 ? n : 1;
+  return Math.min(maxQty, Math.max(1, q));
+}
+
+function parseGoodsReturnAmountInput(v: string): number {
+  const n = parseFloat(String(v).replace(/,/g, "").trim());
+  return Number.isFinite(n) ? n : 0;
+}
 
 const INPUT_BG = "#1E1E24";
 const PAN_PREFIX = "PAN:";
@@ -89,6 +113,8 @@ export type InvoiceEditFormProps = {
   transports?: InvoiceTransportRow[];
   onSaved: (row: RetailerInvoiceRow) => void;
   onCancel: () => void;
+  /** Called after a credit note is saved so parents can refresh aggregates. */
+  onGoodsReturnsChanged?: () => void;
 };
 
 export function InvoiceEditForm({
@@ -98,6 +124,7 @@ export function InvoiceEditForm({
   transports: transportsProp,
   onSaved,
   onCancel,
+  onGoodsReturnsChanged,
 }: InvoiceEditFormProps) {
   const [retailers, setRetailers] = useState<RetailerRow[]>(retailersProp ?? []);
   const [transports, setTransports] = useState<InvoiceTransportRow[]>(transportsProp ?? []);
@@ -117,9 +144,22 @@ export function InvoiceEditForm({
   const [lrNo, setLrNo] = useState("");
   const [lrDate, setLrDate] = useState(todayISODate());
   const [transportAmount, setTransportAmount] = useState("");
-  const [activeTab, setActiveTab] = useState<"main" | "transport">("main");
+  const [activeTab, setActiveTab] = useState<"main" | "transport" | "credit">("main");
+
+  const [goodsReturns, setGoodsReturns] = useState<InvoiceGoodsReturnRow[]>([]);
+  const [loadingReturns, setLoadingReturns] = useState(false);
+  const [savingCredit, setSavingCredit] = useState(false);
+  const [creditEditingId, setCreditEditingId] = useState<string | null>(null);
+  const [creditNoteDate, setCreditNoteDate] = useState(todayISODate());
+  const [creditQtyReturn, setCreditQtyReturn] = useState("1");
+  const [creditGoodsAmount, setCreditGoodsAmount] = useState("");
+
+  /** Avoid full-screen credit loading (and unmounting fields) when revisiting the Credit tab for the same invoice. */
+  const creditListLoadedForInvoiceRef = useRef<string | null>(null);
 
   const inputStyle = { backgroundColor: INPUT_BG } as CSSProperties;
+
+  const invoiceMaxQty = useMemo(() => Math.max(1, parseQuantityInput(quantity) || 1), [quantity]);
 
   useEffect(() => {
     if (retailersProp) setRetailers(retailersProp);
@@ -210,6 +250,140 @@ export function InvoiceEditForm({
     if (loadingRefs) return;
     hydrateFromInvoice(invoice, transports);
   }, [invoice, transports, loadingRefs, hydrateFromInvoice]);
+
+  const resetCreditToNew = useCallback(() => {
+    setCreditEditingId(null);
+    setCreditNoteDate(todayISODate());
+    setCreditQtyReturn("1");
+    setCreditGoodsAmount("");
+  }, []);
+
+  const startEditCredit = useCallback(
+    (row: InvoiceGoodsReturnRow) => {
+      setCreditEditingId(row.id);
+      setCreditNoteDate((row.return_date || todayISODate()).slice(0, 10));
+      setCreditQtyReturn(String(quantityReturnedFromRow(row, invoiceMaxQty)));
+      const amt = coerceGoodsReturnAmountFromDb(row.amount);
+      setCreditGoodsAmount(String(roundGoodsReturnAmount(amt)));
+    },
+    [invoiceMaxQty]
+  );
+
+  useEffect(() => {
+    if (activeTab !== "credit") return;
+    let cancelled = false;
+    const invoiceId = invoice.id;
+    const needsBlockingSpinner = creditListLoadedForInvoiceRef.current !== invoiceId;
+    if (needsBlockingSpinner) {
+      setLoadingReturns(true);
+      setGoodsReturns([]);
+      resetCreditToNew();
+    }
+    void (async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("invoice_goods_returns")
+        .select("*")
+        .eq("invoice_id", invoiceId)
+        .order("return_date", { ascending: false });
+      if (cancelled) return;
+      if (error) {
+        if (needsBlockingSpinner) setLoadingReturns(false);
+        toastError(error.message);
+        return;
+      }
+      const rows = (data ?? []) as InvoiceGoodsReturnRow[];
+      setGoodsReturns(rows);
+      if (needsBlockingSpinner) {
+        setLoadingReturns(false);
+        creditListLoadedForInvoiceRef.current = invoiceId;
+        if (rows.length >= 1) {
+          startEditCredit(rows[0]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, invoice.id, resetCreditToNew, startEditCredit]);
+
+  async function saveCreditNoteInline(e?: FormEvent) {
+    e?.preventDefault();
+    const maxQty = invoiceMaxQty;
+    let qr = Math.floor(parseInt(creditQtyReturn, 10));
+    if (!Number.isFinite(qr) || qr < 1) {
+      if (skipRequiredFieldValidation()) qr = 1;
+      else {
+        toastError("Enter quantity to return (at least 1).");
+        return;
+      }
+    }
+    if (qr > maxQty) {
+      toastError(`Quantity to return cannot exceed invoice quantity (${maxQty}).`);
+      return;
+    }
+
+    let rawAmt = parseGoodsReturnAmountInput(creditGoodsAmount);
+    if (rawAmt <= 0 && skipRequiredFieldValidation()) {
+      rawAmt = 0.01;
+    }
+    if (rawAmt <= 0) {
+      toastError("Enter goods return amount.");
+      return;
+    }
+
+    const roundedAmount = roundGoodsReturnAmount(rawAmt);
+    if (roundedAmount <= 0) {
+      toastError("Goods return amount is too small after rounding.");
+      return;
+    }
+
+    setSavingCredit(true);
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setSavingCredit(false);
+      toastError("You must be signed in.");
+      return;
+    }
+
+    const payload = {
+      user_id: user.id,
+      invoice_id: invoice.id,
+      return_date: creditNoteDate || todayISODate(),
+      amount: roundedAmount,
+      quantity_returned: qr,
+      note: null as string | null,
+    };
+
+    const query = creditEditingId
+      ? supabase.from("invoice_goods_returns").update(payload).eq("id", creditEditingId).eq("user_id", user.id)
+      : supabase.from("invoice_goods_returns").insert(payload);
+    const { data, error } = await query.select().single();
+
+    if (error) {
+      setSavingCredit(false);
+      if (error.message.includes("quantity_returned") || error.code === "PGRST204") {
+        toastError(
+          "Database is missing column quantity_returned. Apply the migration in supabase/migrations/ then try again."
+        );
+        return;
+      }
+      toastError(error.message);
+      return;
+    }
+
+    const savedRow = data as InvoiceGoodsReturnRow;
+    setGoodsReturns((prev) =>
+      creditEditingId ? prev.map((r) => (r.id === creditEditingId ? savedRow : r)) : [savedRow, ...prev]
+    );
+    setSavingCredit(false);
+    toastSuccess(creditEditingId ? "Credit note updated." : "Credit note saved.");
+    startEditCredit(savedRow);
+    onGoodsReturnsChanged?.();
+  }
 
   function validateInvoiceStep(): boolean {
     if (skipRequiredFieldValidation()) return true;
@@ -473,14 +647,13 @@ export function InvoiceEditForm({
     <div className="flex min-h-0 w-full flex-1 flex-col">
       {/* Scroll only the form; footer stays after all fields (never between inputs). */}
       <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
-        <form id="invoice-edit-inline-form" className="space-y-5 pb-4" onSubmit={onSubmit}>
         <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-1 ring-1 ring-white/[0.03]">
-          <div className="grid grid-cols-2 gap-1">
+          <div className="grid grid-cols-3 gap-1">
             <button
               type="button"
               onClick={() => setActiveTab("main")}
               aria-pressed={activeTab === "main"}
-              className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+              className={`rounded-xl px-2 py-2 text-xs font-semibold transition sm:px-3 sm:text-sm ${
                 activeTab === "main"
                   ? "bg-amber-500/15 text-amber-100 ring-1 ring-amber-500/30"
                   : "text-zinc-400 hover:bg-zinc-900/70 hover:text-zinc-200"
@@ -492,7 +665,7 @@ export function InvoiceEditForm({
               type="button"
               onClick={() => setActiveTab("transport")}
               aria-pressed={activeTab === "transport"}
-              className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+              className={`rounded-xl px-2 py-2 text-xs font-semibold transition sm:px-3 sm:text-sm ${
                 activeTab === "transport"
                   ? "bg-sky-500/15 text-sky-100 ring-1 ring-sky-500/30"
                   : "text-zinc-400 hover:bg-zinc-900/70 hover:text-zinc-200"
@@ -500,8 +673,22 @@ export function InvoiceEditForm({
             >
               Transport
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("credit")}
+              aria-pressed={activeTab === "credit"}
+              className={`rounded-xl px-2 py-2 text-xs font-semibold transition sm:px-3 sm:text-sm ${
+                activeTab === "credit"
+                  ? "bg-rose-500/15 text-rose-100 ring-1 ring-rose-500/30"
+                  : "text-zinc-400 hover:bg-zinc-900/70 hover:text-zinc-200"
+              }`}
+            >
+              Credit
+            </button>
           </div>
         </div>
+        {activeTab !== "credit" ? (
+        <form id="invoice-edit-inline-form" className="space-y-5 pb-4" onSubmit={onSubmit}>
         {activeTab === "main" ? (
         <>
         <div className={SECTION_WRAP}>
@@ -771,26 +958,158 @@ export function InvoiceEditForm({
         </div>
         ) : null}
         </form>
+        ) : (
+        <form id="invoice-credit-form" className="space-y-5 pb-4" onSubmit={(e) => void saveCreditNoteInline(e)}>
+          <div className={SECTION_WRAP}>
+            <h3 className={SECTION_TITLE}>Credit notes (goods return)</h3>
+            <p className="mb-4 text-xs leading-relaxed text-zinc-500">
+              Save the main bill first if you changed quantity—return qty cannot exceed invoice quantity.
+              {goodsReturns.length > 1
+                ? " Several credit notes exist; tap one to edit it in the form below."
+                : null}
+            </p>
+            {loadingReturns ? (
+              <div className="flex items-center gap-3 py-8">
+                <span
+                  className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-zinc-600 border-t-rose-400"
+                  aria-hidden
+                />
+                <p className="text-sm text-zinc-400">Loading credit notes…</p>
+              </div>
+            ) : (
+              <>
+                {goodsReturns.length > 1 ? (
+                  <ul className="mb-4 space-y-2">
+                    <li className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                      Choose credit note
+                    </li>
+                    {goodsReturns.map((r) => (
+                      <li key={r.id}>
+                        <button
+                          type="button"
+                          onClick={() => startEditCredit(r)}
+                          className={`flex w-full flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition ${
+                            creditEditingId === r.id
+                              ? "border-rose-500/50 bg-rose-950/25 ring-1 ring-rose-500/20"
+                              : "border-zinc-700/60 bg-zinc-900/40 hover:border-zinc-600 hover:bg-zinc-900/70"
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <p className="font-mono text-sm font-medium text-zinc-200">
+                              {formatInr(roundGoodsReturnAmount(coerceGoodsReturnAmountFromDb(r.amount)))}
+                            </p>
+                            <p className="text-xs text-zinc-500">
+                              {(r.return_date || "").slice(0, 10)}
+                              <span className="text-zinc-600"> · </span>
+                              Qty returned {quantityReturnedFromRow(r, invoiceMaxQty)}
+                            </p>
+                          </div>
+                          {creditEditingId === r.id ? (
+                            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-rose-300/90">
+                              In form
+                            </span>
+                          ) : null}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : goodsReturns.length === 1 ? (
+                  <p className="mb-4 text-xs text-zinc-500">Goods return for this invoice (edit below).</p>
+                ) : (
+                  <p className="mb-4 text-sm text-zinc-500">No credit notes yet for this invoice—fill the form below to add one.</p>
+                )}
+                <div className="space-y-4">
+                  <div>
+                    <label className={labelDark}>Date</label>
+                    <DatePicker
+                      value={creditNoteDate}
+                      onChange={setCreditNoteDate}
+                      disabled={savingCredit}
+                      className={fieldClassDark()}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelDark}>Invoice quantity (max return)</label>
+                    <input
+                      type="text"
+                      readOnly
+                      className={`${fieldClassDark()} cursor-not-allowed opacity-80`}
+                      style={inputStyle}
+                      value={String(invoiceMaxQty)}
+                      aria-live="polite"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelDark} htmlFor="inv-credit-qty">
+                      Quantity to return
+                    </label>
+                    <input
+                      id="inv-credit-qty"
+                      type="text"
+                      inputMode="numeric"
+                      className={fieldClassDark()}
+                      style={inputStyle}
+                      value={creditQtyReturn}
+                      onChange={(e) => setCreditQtyReturn(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      disabled={savingCredit}
+                      placeholder="1"
+                    />
+                    <p className="mt-1 text-[11px] text-zinc-500">Maximum {invoiceMaxQty}.</p>
+                  </div>
+                  <div>
+                    <label className={labelDark} htmlFor="inv-credit-amt">
+                      Goods return amount
+                    </label>
+                    <input
+                      id="inv-credit-amt"
+                      type="text"
+                      inputMode="decimal"
+                      className={fieldClassDark()}
+                      style={inputStyle}
+                      value={creditGoodsAmount}
+                      onChange={(e) => setCreditGoodsAmount(e.target.value)}
+                      disabled={savingCredit}
+                      placeholder="0.00"
+                    />
+                    <p className="mt-1 text-[11px] text-zinc-500">Rounded to two decimal places when saved.</p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </form>
+        )}
       </div>
 
       <div className="shrink-0 border-t border-zinc-700/80 bg-[#16181f]/95 px-0 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md supports-[backdrop-filter]:bg-[#16181f]/88">
         <div className="flex gap-3">
           <button
             type="button"
-            disabled={saving}
+            disabled={saving || savingCredit}
             onClick={onCancel}
             className="min-h-[48px] flex-1 rounded-xl border border-white/20 py-3 text-sm font-semibold text-white transition hover:bg-white/5 disabled:opacity-50"
           >
             Cancel
           </button>
-          <button
-            type="submit"
-            form="invoice-edit-inline-form"
-            disabled={saving}
-            className="min-h-[48px] flex-1 rounded-xl bg-gradient-to-br from-amber-200 to-amber-100 py-3 text-sm font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition hover:from-amber-100 hover:to-amber-50 disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Save changes"}
-          </button>
+          {activeTab === "credit" ? (
+            <button
+              type="submit"
+              form="invoice-credit-form"
+              disabled={savingCredit || loadingReturns}
+              className="min-h-[48px] flex-1 rounded-xl bg-gradient-to-br from-rose-200 to-rose-100 py-3 text-sm font-semibold text-rose-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition hover:from-rose-100 hover:to-rose-50 disabled:opacity-50"
+            >
+              {savingCredit ? "Saving…" : "Save credit note"}
+            </button>
+          ) : (
+            <button
+              type="submit"
+              form="invoice-edit-inline-form"
+              disabled={saving}
+              className="min-h-[48px] flex-1 rounded-xl bg-gradient-to-br from-amber-200 to-amber-100 py-3 text-sm font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition hover:from-amber-100 hover:to-amber-50 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save changes"}
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -304,6 +304,7 @@ export function CompaniesWorkspace({
   const [companyInvoices, setCompanyInvoices] = useState<RetailerInvoiceRow[]>([]);
   const [companyInvoicesLoading, setCompanyInvoicesLoading] = useState(false);
   const [invoiceReturnAmountById, setInvoiceReturnAmountById] = useState<Record<string, number>>({});
+  const [invoiceReturnsRefreshKey, setInvoiceReturnsRefreshKey] = useState(0);
   const [invoiceDeleteTarget, setInvoiceDeleteTarget] = useState<RetailerInvoiceRow | null>(null);
   const [invoiceDeleting, setInvoiceDeleting] = useState(false);
   /** When set, company sheet shows inline invoice editor instead of the invoice list. */
@@ -389,7 +390,7 @@ export function CompaniesWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [panel, selected?.id, pathname]);
+  }, [panel, selected?.id, pathname, invoiceReturnsRefreshKey]);
 
   useEffect(() => {
     const pid = pendingInlineInvoiceIdRef.current;
@@ -1354,6 +1355,7 @@ export function CompaniesWorkspace({
                                 router.refresh();
                               }}
                               onCancel={() => setInlineInvoiceEdit(null)}
+                              onGoodsReturnsChanged={() => setInvoiceReturnsRefreshKey((k) => k + 1)}
                             />
                           </div>
                         </div>

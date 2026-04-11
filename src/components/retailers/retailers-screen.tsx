@@ -201,6 +201,7 @@ export function RetailersScreen({
   const [retailerInvoices, setRetailerInvoices] = useState<RetailerInvoiceRow[]>([]);
   const [retailerInvoicesLoading, setRetailerInvoicesLoading] = useState(false);
   const [invoiceReturnAmountById, setInvoiceReturnAmountById] = useState<Record<string, number>>({});
+  const [invoiceReturnsRefreshKey, setInvoiceReturnsRefreshKey] = useState(0);
   const [inlineInvoiceEdit, setInlineInvoiceEdit] = useState<RetailerInvoiceRow | null>(null);
   const [invoiceDeleteTarget, setInvoiceDeleteTarget] = useState<RetailerInvoiceRow | null>(null);
   const [invoiceDeleting, setInvoiceDeleting] = useState(false);
@@ -280,7 +281,7 @@ export function RetailersScreen({
     return () => {
       cancelled = true;
     };
-  }, [panel, selected?.id, pathname]);
+  }, [panel, selected?.id, pathname, invoiceReturnsRefreshKey]);
 
   useEffect(() => {
     const pid = pendingInlineInvoiceIdRef.current;
@@ -1307,6 +1308,7 @@ export function RetailersScreen({
                                 router.refresh();
                               }}
                               onCancel={() => setInlineInvoiceEdit(null)}
+                              onGoodsReturnsChanged={() => setInvoiceReturnsRefreshKey((k) => k + 1)}
                             />
                           </div>
                         </div>
