@@ -2,11 +2,16 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { DatePicker } from "@/components/ui/date-picker";
-import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
+import { SearchableDropdown, type SearchableDropdownOption } from "@/components/ui/searchable-dropdown";
 import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
-import type { InvoiceGoodsReturnRow, InvoiceTransportRow, RetailerInvoiceRow } from "@/types/invoice";
+import type {
+  InvoiceGoodsReturnRow,
+  InvoicePaymentRow,
+  InvoiceTransportRow,
+  RetailerInvoiceRow,
+} from "@/types/invoice";
 import type { RetailerRow } from "@/types/retailer";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 
@@ -50,6 +55,14 @@ const labelDark = "mb-1.5 block text-sm font-medium text-zinc-100";
 const SECTION_WRAP =
   "rounded-2xl border border-zinc-800/70 bg-zinc-950/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ring-1 ring-white/[0.03] sm:p-5";
 const SECTION_TITLE = "mb-4 text-[11px] font-bold uppercase tracking-[0.16em] text-amber-200/85";
+
+const PAYMENT_METHOD_OPTIONS: SearchableDropdownOption[] = [
+  { value: "UPI", label: "UPI" },
+  { value: "NEFT", label: "NEFT" },
+  { value: "Cheque", label: "Cheque" },
+  { value: "Cash", label: "Cash" },
+  { value: "Other", label: "Other" },
+];
 
 function todayISODate() {
   const d = new Date();
@@ -115,6 +128,11 @@ export type InvoiceEditFormProps = {
   onCancel: () => void;
   /** Called after a credit note is saved so parents can refresh aggregates. */
   onGoodsReturnsChanged?: () => void;
+  /** Called after a payment is saved so parents can refresh paid / outstanding on the invoice row. */
+  onPaymentsChanged?: (
+    invoiceId: string,
+    patch: Pick<RetailerInvoiceRow, "payment_received" | "outstanding_amount">
+  ) => void;
 };
 
 export function InvoiceEditForm({
@@ -125,6 +143,7 @@ export function InvoiceEditForm({
   onSaved,
   onCancel,
   onGoodsReturnsChanged,
+  onPaymentsChanged,
 }: InvoiceEditFormProps) {
   const [retailers, setRetailers] = useState<RetailerRow[]>(retailersProp ?? []);
   const [transports, setTransports] = useState<InvoiceTransportRow[]>(transportsProp ?? []);
@@ -144,7 +163,7 @@ export function InvoiceEditForm({
   const [lrNo, setLrNo] = useState("");
   const [lrDate, setLrDate] = useState(todayISODate());
   const [transportAmount, setTransportAmount] = useState("");
-  const [activeTab, setActiveTab] = useState<"main" | "transport" | "credit">("main");
+  const [activeTab, setActiveTab] = useState<"main" | "transport" | "credit" | "payment">("main");
 
   const [goodsReturns, setGoodsReturns] = useState<InvoiceGoodsReturnRow[]>([]);
   const [loadingReturns, setLoadingReturns] = useState(false);
@@ -154,12 +173,61 @@ export function InvoiceEditForm({
   const [creditQtyReturn, setCreditQtyReturn] = useState("1");
   const [creditGoodsAmount, setCreditGoodsAmount] = useState("");
 
+  const [invoicePayments, setInvoicePayments] = useState<InvoicePaymentRow[]>([]);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [paymentEditingId, setPaymentEditingId] = useState<string | null>(null);
+  const [paymentDate, setPaymentDate] = useState(todayISODate());
+  const [paymentMethod, setPaymentMethod] = useState<InvoicePaymentRow["method"]>("UPI");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [payChequeNo, setPayChequeNo] = useState("");
+  const [payUpiNo, setPayUpiNo] = useState("");
+  const [payUpiRefNo, setPayUpiRefNo] = useState("");
+  const [payNeftUtrNo, setPayNeftUtrNo] = useState("");
+  const [payNote, setPayNote] = useState("");
+
   /** Avoid full-screen credit loading (and unmounting fields) when revisiting the Credit tab for the same invoice. */
   const creditListLoadedForInvoiceRef = useRef<string | null>(null);
+  const paymentListLoadedForInvoiceRef = useRef<string | null>(null);
 
   const inputStyle = { backgroundColor: INPUT_BG } as CSSProperties;
 
   const invoiceMaxQty = useMemo(() => Math.max(1, parseQuantityInput(quantity) || 1), [quantity]);
+
+  const paymentOtherTotal = useMemo(
+    () =>
+      round2(
+        invoicePayments
+          .filter((p) => p.id !== paymentEditingId)
+          .reduce((a, p) => a + Number(p.amount ?? 0), 0)
+      ),
+    [invoicePayments, paymentEditingId]
+  );
+
+  const payDraftAmount = useMemo(() => round2(toNum(paymentAmount)), [paymentAmount]);
+
+  const invoiceTotalForPayment = useMemo(() => round2(Number(invoice.total_amount ?? 0)), [invoice.total_amount]);
+
+  const oldPaymentEntryAmount = useMemo(() => {
+    if (!paymentEditingId) return 0;
+    const row = invoicePayments.find((p) => p.id === paymentEditingId);
+    return round2(Number(row?.amount ?? 0));
+  }, [paymentEditingId, invoicePayments]);
+
+  const payOutstandingBefore = useMemo(
+    () => Math.max(0, round2(invoiceTotalForPayment - paymentOtherTotal - oldPaymentEntryAmount)),
+    [invoiceTotalForPayment, paymentOtherTotal, oldPaymentEntryAmount]
+  );
+
+  const payOutstandingAfter = useMemo(
+    () => Math.max(0, round2(invoiceTotalForPayment - paymentOtherTotal - payDraftAmount)),
+    [invoiceTotalForPayment, paymentOtherTotal, payDraftAmount]
+  );
+
+  const payExceedsOutstanding = useMemo(() => {
+    if (payDraftAmount <= 0) return false;
+    return payDraftAmount > payOutstandingBefore + 0.005;
+  }, [payDraftAmount, payOutstandingBefore]);
 
   useEffect(() => {
     if (retailersProp) setRetailers(retailersProp);
@@ -307,6 +375,68 @@ export function InvoiceEditForm({
     };
   }, [activeTab, invoice.id, resetCreditToNew, startEditCredit]);
 
+  const resetPaymentToNew = useCallback(() => {
+    setPaymentEditingId(null);
+    setPaymentDate(todayISODate());
+    setPaymentMethod("UPI");
+    setPaymentAmount("");
+    setPayChequeNo("");
+    setPayUpiNo("");
+    setPayUpiRefNo("");
+    setPayNeftUtrNo("");
+    setPayNote("");
+  }, []);
+
+  const startEditPayment = useCallback((row: InvoicePaymentRow) => {
+    setPaymentEditingId(row.id);
+    setPaymentDate((row.payment_date || todayISODate()).slice(0, 10));
+    setPaymentMethod(row.method);
+    setPaymentAmount(String(round2(Number(row.amount ?? 0))));
+    setPayChequeNo(row.cheque_no ?? "");
+    setPayUpiNo(row.upi_no ?? "");
+    setPayUpiRefNo(row.upi_ref_no ?? "");
+    setPayNeftUtrNo(row.neft_utr_no ?? "");
+    setPayNote(row.note ?? "");
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== "payment") return;
+    let cancelled = false;
+    const invoiceId = invoice.id;
+    const needsBlockingSpinner = paymentListLoadedForInvoiceRef.current !== invoiceId;
+    if (needsBlockingSpinner) {
+      setLoadingPayments(true);
+      setInvoicePayments([]);
+      resetPaymentToNew();
+    }
+    void (async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("invoice_payments")
+        .select("*")
+        .eq("invoice_id", invoiceId)
+        .order("payment_date", { ascending: false });
+      if (cancelled) return;
+      if (error) {
+        if (needsBlockingSpinner) setLoadingPayments(false);
+        toastError(error.message);
+        return;
+      }
+      const rows = (data ?? []) as InvoicePaymentRow[];
+      setInvoicePayments(rows);
+      if (needsBlockingSpinner) {
+        setLoadingPayments(false);
+        paymentListLoadedForInvoiceRef.current = invoiceId;
+        if (rows.length >= 1) {
+          startEditPayment(rows[0]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, invoice.id, resetPaymentToNew, startEditPayment]);
+
   async function saveCreditNoteInline(e?: FormEvent) {
     e?.preventDefault();
     const maxQty = invoiceMaxQty;
@@ -383,6 +513,82 @@ export function InvoiceEditForm({
     toastSuccess(creditEditingId ? "Credit note updated." : "Credit note saved.");
     startEditCredit(savedRow);
     onGoodsReturnsChanged?.();
+  }
+
+  async function savePaymentInline(e?: FormEvent) {
+    e?.preventDefault();
+    let amt = toNum(paymentAmount);
+    if (amt <= 0 && skipRequiredFieldValidation()) {
+      amt = 0.01;
+    }
+    if (amt <= 0) {
+      toastError("Enter payment amount.");
+      return;
+    }
+
+    setSavingPayment(true);
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setSavingPayment(false);
+      toastError("You must be signed in.");
+      return;
+    }
+
+    const payload = {
+      user_id: user.id,
+      invoice_id: invoice.id,
+      payment_date: paymentDate || todayISODate(),
+      method: paymentMethod,
+      amount: round2(amt),
+      cheque_no: payChequeNo.trim() || null,
+      upi_no: payUpiNo.trim() || null,
+      upi_ref_no: payUpiRefNo.trim() || null,
+      neft_utr_no: payNeftUtrNo.trim() || null,
+      note: payNote.trim() || null,
+    };
+
+    const query = paymentEditingId
+      ? supabase.from("invoice_payments").update(payload).eq("id", paymentEditingId).eq("user_id", user.id)
+      : supabase.from("invoice_payments").insert(payload);
+    const { data, error } = await query.select().single();
+
+    if (error) {
+      setSavingPayment(false);
+      toastError(error.message);
+      return;
+    }
+
+    const invId = invoice.id;
+    const [sumRes, invRes] = await Promise.all([
+      supabase.from("invoice_payments").select("amount").eq("invoice_id", invId),
+      supabase.from("retailer_invoices").select("total_amount").eq("id", invId).single(),
+    ]);
+
+    const savedRow = data as InvoicePaymentRow;
+    setInvoicePayments((prev) =>
+      paymentEditingId ? prev.map((r) => (r.id === paymentEditingId ? savedRow : r)) : [savedRow, ...prev]
+    );
+    setSavingPayment(false);
+    toastSuccess(paymentEditingId ? "Payment updated." : "Payment saved.");
+    startEditPayment(savedRow);
+
+    if (!sumRes.error && !invRes.error && invRes.data) {
+      const paid = round2((sumRes.data ?? []).reduce((a, r) => a + Number(r.amount || 0), 0));
+      const total = Number(invRes.data.total_amount || 0);
+      const outstanding = Math.max(0, round2(total - paid));
+      await supabase
+        .from("retailer_invoices")
+        .update({
+          payment_received: paid,
+          outstanding_amount: outstanding,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", invId);
+      onPaymentsChanged?.(invId, { payment_received: paid, outstanding_amount: outstanding });
+    }
   }
 
   function validateInvoiceStep(): boolean {
@@ -648,7 +854,7 @@ export function InvoiceEditForm({
       {/* Scroll only the form; footer stays after all fields (never between inputs). */}
       <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
         <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-1 ring-1 ring-white/[0.03]">
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
             <button
               type="button"
               onClick={() => setActiveTab("main")}
@@ -685,9 +891,21 @@ export function InvoiceEditForm({
             >
               Credit
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("payment")}
+              aria-pressed={activeTab === "payment"}
+              className={`rounded-xl px-2 py-2 text-xs font-semibold transition sm:px-3 sm:text-sm ${
+                activeTab === "payment"
+                  ? "bg-emerald-500/15 text-emerald-100 ring-1 ring-emerald-500/25"
+                  : "text-zinc-400 hover:bg-zinc-900/70 hover:text-zinc-200"
+              }`}
+            >
+              Payment
+            </button>
           </div>
         </div>
-        {activeTab !== "credit" ? (
+        {activeTab === "main" || activeTab === "transport" ? (
         <form id="invoice-edit-inline-form" className="space-y-5 pb-4" onSubmit={onSubmit}>
         {activeTab === "main" ? (
         <>
@@ -958,7 +1176,7 @@ export function InvoiceEditForm({
         </div>
         ) : null}
         </form>
-        ) : (
+        ) : activeTab === "credit" ? (
         <form id="invoice-credit-form" className="space-y-5 pb-4" onSubmit={(e) => void saveCreditNoteInline(e)}>
           <div className={SECTION_WRAP}>
             <h3 className={SECTION_TITLE}>Credit notes (goods return)</h3>
@@ -1078,6 +1296,211 @@ export function InvoiceEditForm({
             )}
           </div>
         </form>
+        ) : (
+        <form id="invoice-payment-form" className="space-y-5 pb-4" onSubmit={(e) => void savePaymentInline(e)}>
+          <div className={SECTION_WRAP}>
+            <h3 className={SECTION_TITLE}>Payments</h3>
+            <p className="mb-4 text-xs leading-relaxed text-zinc-500">
+              Payments for this invoice. Edit entries here; use the Payments page only to record new payments quickly
+              across invoices.
+              {invoicePayments.length > 1 ? " Several entries exist—tap one to edit it below." : null}
+            </p>
+            {loadingPayments ? (
+              <div className="flex items-center gap-3 py-8">
+                <span
+                  className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-zinc-600 border-t-emerald-400"
+                  aria-hidden
+                />
+                <p className="text-sm text-zinc-400">Loading payments…</p>
+              </div>
+            ) : (
+              <>
+                {invoicePayments.length > 1 ? (
+                  <ul className="mb-4 space-y-2">
+                    <li className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                      Choose payment
+                    </li>
+                    {invoicePayments.map((p) => (
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          onClick={() => startEditPayment(p)}
+                          className={`flex w-full flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition ${
+                            paymentEditingId === p.id
+                              ? "border-emerald-500/50 bg-emerald-950/25 ring-1 ring-emerald-500/20"
+                              : "border-zinc-700/60 bg-zinc-900/40 hover:border-zinc-600 hover:bg-zinc-900/70"
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <p className="font-mono text-sm font-medium text-zinc-200">
+                              {formatInr(round2(Number(p.amount ?? 0)))}
+                            </p>
+                            <p className="text-xs text-zinc-500">
+                              {(p.payment_date || "").slice(0, 10)}
+                              <span className="text-zinc-600"> · </span>
+                              {p.method}
+                            </p>
+                          </div>
+                          {paymentEditingId === p.id ? (
+                            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-emerald-300/90">
+                              In form
+                            </span>
+                          ) : null}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : invoicePayments.length === 1 ? (
+                  <p className="mb-4 text-xs text-zinc-500">Payment recorded for this invoice (edit below).</p>
+                ) : (
+                  <p className="mb-4 text-sm text-zinc-500">No payments yet—fill the form below to add one.</p>
+                )}
+
+                <div className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-4 ring-1 ring-emerald-500/10">
+                  <div className="mb-3 space-y-2 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-zinc-500">Invoice amount</span>
+                      <span className="font-mono font-semibold tabular-nums text-zinc-100">{formatInr(invoiceTotalForPayment)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-zinc-500">Paid (other entries)</span>
+                      <span className="font-mono tabular-nums text-zinc-200">{formatInr(paymentOtherTotal)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 border-t border-zinc-700/50 pt-2">
+                      <span className="text-zinc-500">Outstanding (before this payment)</span>
+                      <span className="font-mono font-semibold tabular-nums text-zinc-100">{formatInr(payOutstandingBefore)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <label className={labelDark}>Payment date</label>
+                    <DatePicker
+                      value={paymentDate}
+                      onChange={setPaymentDate}
+                      disabled={savingPayment}
+                      className={fieldClassDark()}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelDark}>Method</label>
+                    <SearchableDropdown
+                      value={paymentMethod}
+                      onChange={(v) => setPaymentMethod(v as InvoicePaymentRow["method"])}
+                      options={PAYMENT_METHOD_OPTIONS}
+                      placeholder="Method"
+                      disabled={savingPayment}
+                      showSearch={false}
+                      allowClear={false}
+                      inputBackground={INPUT_BG}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelDark} htmlFor="inv-pay-amt">
+                      Payment amount
+                    </label>
+                    <input
+                      id="inv-pay-amt"
+                      inputMode="decimal"
+                      className={fieldClassDark()}
+                      style={inputStyle}
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      disabled={savingPayment}
+                      placeholder="0.00"
+                    />
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-zinc-500">Outstanding after save</span>
+                        <span
+                          className={`font-mono font-semibold tabular-nums ${
+                            payExceedsOutstanding ? "text-amber-400" : "text-zinc-100"
+                          }`}
+                        >
+                          {formatInr(payOutstandingAfter)}
+                        </span>
+                      </div>
+                      {payExceedsOutstanding ? (
+                        <p className="text-xs text-amber-400/90">This payment is more than the current outstanding balance.</p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelDark} htmlFor="inv-pay-cheque">
+                      Cheque no.
+                    </label>
+                    <input
+                      id="inv-pay-cheque"
+                      className={fieldClassDark()}
+                      style={inputStyle}
+                      value={payChequeNo}
+                      onChange={(e) => setPayChequeNo(e.target.value)}
+                      disabled={savingPayment}
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelDark} htmlFor="inv-pay-upi">
+                      UPI no.
+                    </label>
+                    <input
+                      id="inv-pay-upi"
+                      className={fieldClassDark()}
+                      style={inputStyle}
+                      value={payUpiNo}
+                      onChange={(e) => setPayUpiNo(e.target.value)}
+                      disabled={savingPayment}
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelDark} htmlFor="inv-pay-upi-ref">
+                      UPI ref no.
+                    </label>
+                    <input
+                      id="inv-pay-upi-ref"
+                      className={fieldClassDark()}
+                      style={inputStyle}
+                      value={payUpiRefNo}
+                      onChange={(e) => setPayUpiRefNo(e.target.value)}
+                      disabled={savingPayment}
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelDark} htmlFor="inv-pay-neft">
+                      NEFT UTR no.
+                    </label>
+                    <input
+                      id="inv-pay-neft"
+                      className={fieldClassDark()}
+                      style={inputStyle}
+                      value={payNeftUtrNo}
+                      onChange={(e) => setPayNeftUtrNo(e.target.value)}
+                      disabled={savingPayment}
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelDark} htmlFor="inv-pay-note">
+                      Note
+                    </label>
+                    <input
+                      id="inv-pay-note"
+                      className={fieldClassDark()}
+                      style={inputStyle}
+                      value={payNote}
+                      onChange={(e) => setPayNote(e.target.value)}
+                      disabled={savingPayment}
+                      placeholder="Optional"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </form>
         )}
       </div>
 
@@ -1085,7 +1508,7 @@ export function InvoiceEditForm({
         <div className="flex gap-3">
           <button
             type="button"
-            disabled={saving || savingCredit}
+            disabled={saving || savingCredit || savingPayment}
             onClick={onCancel}
             className="min-h-[48px] flex-1 rounded-xl border border-white/20 py-3 text-sm font-semibold text-white transition hover:bg-white/5 disabled:opacity-50"
           >
@@ -1099,6 +1522,15 @@ export function InvoiceEditForm({
               className="min-h-[48px] flex-1 rounded-xl bg-gradient-to-br from-rose-200 to-rose-100 py-3 text-sm font-semibold text-rose-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition hover:from-rose-100 hover:to-rose-50 disabled:opacity-50"
             >
               {savingCredit ? "Saving…" : "Save credit note"}
+            </button>
+          ) : activeTab === "payment" ? (
+            <button
+              type="submit"
+              form="invoice-payment-form"
+              disabled={savingPayment || loadingPayments}
+              className="min-h-[48px] flex-1 rounded-xl bg-gradient-to-br from-emerald-200 to-emerald-100 py-3 text-sm font-semibold text-emerald-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition hover:from-emerald-100 hover:to-emerald-50 disabled:opacity-50"
+            >
+              {savingPayment ? "Saving…" : "Save payment"}
             </button>
           ) : (
             <button

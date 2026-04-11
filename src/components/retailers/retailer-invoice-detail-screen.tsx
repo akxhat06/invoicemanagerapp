@@ -125,7 +125,9 @@ export function RetailerInvoiceDetailScreen({
 
       <section className="rounded-2xl border border-border bg-card/90 p-4 shadow-sm">
         <h3 className="font-semibold">Manage In Separate Sections</h3>
-        <p className="mt-1 text-sm text-muted-foreground">Add or edit there. This page shows mapped details only.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Open each section to add entries. Edit existing payments from company or retailer → invoice → Payment tab.
+        </p>
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Link href={`/transport?invoiceId=${invoice.id}`} className="group flex items-center justify-between rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2.5 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-500/10">
             <span className="inline-flex items-center gap-2"><ActionIcon type="transport" />Transport</span>
@@ -133,7 +135,7 @@ export function RetailerInvoiceDetailScreen({
           </Link>
           <Link href={`/payments?invoiceId=${invoice.id}`} className="group flex items-center justify-between rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-3 py-2.5 text-sm font-semibold text-indigo-200 transition hover:bg-indigo-500/10">
             <span className="inline-flex items-center gap-2"><ActionIcon type="payments" />Payments</span>
-            <span className="text-indigo-300/90 transition group-hover:translate-x-0.5">Open</span>
+            <span className="text-indigo-300/90 transition group-hover:translate-x-0.5">Add</span>
           </Link>
           <Link href={`/returns?invoiceId=${invoice.id}`} className="group flex items-center justify-between rounded-xl border border-rose-500/20 bg-rose-500/5 px-3 py-2.5 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/10">
             <span className="inline-flex items-center gap-2"><ActionIcon type="returns" />Goods Return</span>

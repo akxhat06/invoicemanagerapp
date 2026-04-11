@@ -49,6 +49,16 @@ function IconInvoices({ className }: { className?: string }) {
   );
 }
 
+function IconPayments({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <path d="M2 10h20" />
+      <path d="M6 15h.01M10 15h4" />
+    </svg>
+  );
+}
+
 function IconCreditNote({ className }: { className?: string }) {
   return (
     <svg className={className} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -64,6 +74,7 @@ const ICONS: Record<DashboardNavKey, typeof IconDashboard> = {
   companies: IconCompanies,
   retailers: IconRetailers,
   invoices: IconInvoices,
+  payments: IconPayments,
   credit_notes: IconCreditNote,
 };
 

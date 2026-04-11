@@ -55,7 +55,7 @@ export default async function DashboardHomePage() {
       .lte("bill_date", lastMonth.last),
     supabase
       .from("retailer_invoices")
-      .select("total_amount")
+      .select("total_amount, payment_received")
       .or("is_draft.eq.false,is_draft.is.null"),
   ]);
 
@@ -93,11 +93,17 @@ export default async function DashboardHomePage() {
   }
 
   /** Sum in JS — PostgREST aggregate (e.g. total_amount.sum()) is disabled on this project. */
-  const companiesTotalBilledSafe = (invBilledSumRes.data ?? []).reduce((acc, row) => {
-    const raw = (row as { total_amount?: number | string | null }).total_amount;
-    const n = raw === null || raw === undefined ? 0 : typeof raw === "string" ? parseFloat(raw) : Number(raw);
-    return acc + (Number.isFinite(n) ? n : 0);
-  }, 0);
+  let companiesTotalBilledSafe = 0;
+  let totalPaymentReceived = 0;
+  for (const row of invBilledSumRes.data ?? []) {
+    const r = row as { total_amount?: number | string | null; payment_received?: number | string | null };
+    const ta = r.total_amount;
+    const pr = r.payment_received;
+    const totalN = ta === null || ta === undefined ? 0 : typeof ta === "string" ? parseFloat(ta) : Number(ta);
+    const paidN = pr === null || pr === undefined ? 0 : typeof pr === "string" ? parseFloat(pr) : Number(pr);
+    companiesTotalBilledSafe += Number.isFinite(totalN) ? totalN : 0;
+    totalPaymentReceived += Number.isFinite(paidN) ? paidN : 0;
+  }
 
   return (
     <DashboardHomeView
@@ -105,6 +111,7 @@ export default async function DashboardHomePage() {
       email={user.email ?? ""}
       companyCount={companyCount}
       companiesTotalBilled={companiesTotalBilledSafe}
+      totalPaymentReceived={totalPaymentReceived}
       activeCompaniesCount={activeCompaniesCount}
       retailerCount={retailerCount}
       retailersNew30d={retailersNew30d}

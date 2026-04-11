@@ -1,4 +1,10 @@
-export type DashboardNavKey = "dashboard" | "companies" | "retailers" | "invoices" | "credit_notes";
+export type DashboardNavKey =
+  | "dashboard"
+  | "companies"
+  | "retailers"
+  | "invoices"
+  | "payments"
+  | "credit_notes";
 
 export type DashboardNavItem = {
   key: DashboardNavKey;
@@ -13,6 +19,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { key: "companies", label: "Companies", href: "/companies" },
   { key: "retailers", label: "Retailers", href: "/retailers" },
   { key: "invoices", label: "Invoices", href: "/invoices", showBadge: true },
+  { key: "payments", label: "Payments", href: "/payments" },
   { key: "credit_notes", label: "Credit Note", href: "/credit-notes" },
 ];
 
@@ -30,6 +37,7 @@ export function isDashboardNavActive(pathname: string, key: DashboardNavKey): bo
   if (key === "companies") return p === "/companies" || p.startsWith("/companies/");
   if (key === "retailers") return p === "/retailers" || p.startsWith("/retailers/");
   if (key === "invoices") return p === "/invoices" || p.startsWith("/invoices/");
+  if (key === "payments") return p === "/payments" || p.startsWith("/payments/");
   if (key === "credit_notes") return p === "/credit-notes" || p.startsWith("/credit-notes/");
   return false;
 }

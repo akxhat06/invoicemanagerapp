@@ -1309,6 +1309,11 @@ export function RetailersScreen({
                               }}
                               onCancel={() => setInlineInvoiceEdit(null)}
                               onGoodsReturnsChanged={() => setInvoiceReturnsRefreshKey((k) => k + 1)}
+                              onPaymentsChanged={(invId, patch) => {
+                                setInvoiceReturnsRefreshKey((k) => k + 1);
+                                setInlineInvoiceEdit((prev) => (prev?.id === invId ? { ...prev, ...patch } : prev));
+                                setRetailerInvoices((prev) => prev.map((x) => (x.id === invId ? { ...x, ...patch } : x)));
+                              }}
                             />
                           </div>
                         </div>

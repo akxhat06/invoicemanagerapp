@@ -33,12 +33,32 @@ function DocIcon({ className }: { className?: string }) {
   );
 }
 
+function RupeeStackIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M6 3h12M6 9h12M6 15h8" strokeLinecap="round" />
+      <path d="M14 15l4 4m0-4l-4 4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function WalletIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M20 12V8H6a2 2 0 010-4h14V4a2 2 0 00-2-2H5a2 2 0 00-2 2v16a2 2 0 002 2h13a2 2 0 002-2v-4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M16 12h4v4h-4a2 2 0 010-4z" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export type DashboardHomeViewProps = {
   username: string | undefined;
   email: string;
   companyCount: number;
   /** Sum of invoice total_amount (non-draft) across all companies. */
   companiesTotalBilled: number;
+  /** Sum of payment_received on non-draft invoices. */
+  totalPaymentReceived: number;
   activeCompaniesCount: number;
   retailerCount: number;
   retailersNew30d: number;
@@ -52,6 +72,7 @@ export function DashboardHomeView({
   email,
   companyCount,
   companiesTotalBilled,
+  totalPaymentReceived,
   activeCompaniesCount,
   retailerCount,
   retailersNew30d,
@@ -84,49 +105,69 @@ export function DashboardHomeView({
       </header>
 
       <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">Overview</p>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Link
             href="/companies"
-            className="group flex flex-col rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-3 shadow-sm ring-1 ring-white/[0.04] transition hover:border-emerald-500/30 hover:ring-emerald-500/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500/50"
+            className="group flex min-h-[140px] flex-col rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-3.5 shadow-sm ring-1 ring-white/[0.04] transition hover:border-emerald-500/30 hover:ring-emerald-500/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500/50"
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20">
                 <BuildingIcon className="h-[18px] w-[18px]" />
               </div>
-              <span className="max-w-[5rem] truncate rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300/95">
+              <span className="max-w-[5.5rem] truncate rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300/95">
                 {companyBadge}
               </span>
             </div>
-            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">Companies</p>
+            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">Total companies</p>
             <p className="mt-1 text-3xl font-bold tabular-nums leading-none tracking-tight text-white">{companyCount}</p>
-            <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2.5">
-              <span className="text-[11px] text-zinc-500">Total billed</span>
-              <span className="shrink-0 text-right text-[11px] font-semibold tabular-nums text-emerald-300/95">
-                {formatInr(Math.round(companiesTotalBilled))}
-              </span>
-            </div>
+            <p className="mt-auto pt-3 text-[10px] text-zinc-600">Open companies →</p>
           </Link>
 
           <Link
             href="/retailers"
-            className="group flex flex-col rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-3 shadow-sm ring-1 ring-white/[0.04] transition hover:border-violet-500/30 hover:ring-violet-500/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500/50"
+            className="group flex min-h-[140px] flex-col rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-3.5 shadow-sm ring-1 ring-white/[0.04] transition hover:border-violet-500/30 hover:ring-violet-500/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500/50"
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300 ring-1 ring-violet-500/20">
                 <PersonIcon className="h-[18px] w-[18px]" />
               </div>
-              <span className="max-w-[5rem] truncate rounded-md bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-200/95">
+              <span className="max-w-[5.5rem] truncate rounded-md bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-200/95">
                 {retailerChip}
+                {retailersNew30d > 0 ? ` · +${retailersNew30d} new` : ""}
               </span>
             </div>
-            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">Retailers</p>
+            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">Total retailers</p>
             <p className="mt-1 text-3xl font-bold tabular-nums leading-none tracking-tight text-white">{retailerCount}</p>
-            <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2.5">
-              <span className="text-[11px] text-zinc-500">New (30 days)</span>
-              <span className="shrink-0 text-right text-[11px] font-semibold tabular-nums text-violet-200/95">
-                {retailersNew30d > 0 ? `+${retailersNew30d}` : "—"}
-              </span>
+            <p className="mt-auto pt-3 text-[10px] text-zinc-600">Open retailers →</p>
+          </Link>
+
+          <Link
+            href="/invoices"
+            className="group flex min-h-[140px] flex-col rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-3.5 shadow-sm ring-1 ring-white/[0.04] transition hover:border-amber-500/30 hover:ring-amber-500/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500/50"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-300 ring-1 ring-amber-500/20">
+              <RupeeStackIcon className="h-[18px] w-[18px]" />
             </div>
+            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">Total invoice amount</p>
+            <p className="mt-1 break-words text-xl font-bold tabular-nums leading-snug tracking-tight text-amber-100 sm:text-2xl">
+              {formatInr(Math.round(companiesTotalBilled))}
+            </p>
+            <p className="mt-auto pt-2 text-[10px] leading-snug text-zinc-600">Non-draft bills · Open invoices →</p>
+          </Link>
+
+          <Link
+            href="/payments"
+            className="group flex min-h-[140px] flex-col rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-3.5 shadow-sm ring-1 ring-white/[0.04] transition hover:border-teal-500/30 hover:ring-teal-500/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500/50"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-500/10 text-teal-300 ring-1 ring-teal-500/20">
+              <WalletIcon className="h-[18px] w-[18px]" />
+            </div>
+            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">Total payment</p>
+            <p className="mt-1 break-words text-xl font-bold tabular-nums leading-snug tracking-tight text-teal-100 sm:text-2xl">
+              {formatInr(Math.round(totalPaymentReceived))}
+            </p>
+            <p className="mt-auto pt-2 text-[10px] leading-snug text-zinc-600">Recorded on invoices · Open payments →</p>
           </Link>
         </div>
 
