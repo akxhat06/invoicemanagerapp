@@ -7,8 +7,10 @@ import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
 import type { RetailerInvoiceRow } from "@/types/invoice";
 import type { RetailerRow } from "@/types/retailer";
+import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { useWorkspaceUiSession } from "@/hooks/use-workspace-ui-session";
-import { useRouter } from "next/navigation";
+import { sumGoodsReturnAmountsByInvoiceId, netInvoiceTotalAfterReturns } from "@/lib/invoice-net-after-returns";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type TransitionEvent } from "react";
 
 type Props = {
@@ -86,6 +88,11 @@ function fieldClassDark(multiline = false) {
 }
 
 const labelDark = "mb-1.5 block text-sm font-medium text-zinc-100";
+
+const TAX_ID_TYPE_OPTIONS = [
+  { value: "gst", label: "GST" },
+  { value: "pan", label: "PAN" },
+] as const;
 
 function formatInr(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(
@@ -174,6 +181,7 @@ export function RetailersScreen({
   initialTotalAmountByRetailer,
 }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
   const [retailers, setRetailers] = useState<RetailerRow[]>(initialRetailers);
   const [companies, setCompanies] = useState<CompanyRow[]>(initialCompanies);
   const [invoiceCountByRetailer, setInvoiceCountByRetailer] = useState(initialInvoiceCountByRetailer);
@@ -192,6 +200,7 @@ export function RetailersScreen({
   const pendingInlineInvoiceIdRef = useRef<string | null>(null);
   const [retailerInvoices, setRetailerInvoices] = useState<RetailerInvoiceRow[]>([]);
   const [retailerInvoicesLoading, setRetailerInvoicesLoading] = useState(false);
+  const [invoiceReturnAmountById, setInvoiceReturnAmountById] = useState<Record<string, number>>({});
   const [inlineInvoiceEdit, setInlineInvoiceEdit] = useState<RetailerInvoiceRow | null>(null);
   const [invoiceDeleteTarget, setInvoiceDeleteTarget] = useState<RetailerInvoiceRow | null>(null);
   const [invoiceDeleting, setInvoiceDeleting] = useState(false);
@@ -230,6 +239,7 @@ export function RetailersScreen({
   useEffect(() => {
     if (panel !== "view" || !selected) {
       setRetailerInvoices([]);
+      setInvoiceReturnAmountById({});
       setRetailerInvoicesLoading(false);
       return;
     }
@@ -243,18 +253,34 @@ export function RetailersScreen({
         .eq("retailer_id", selected.id)
         .order("bill_date", { ascending: false });
       if (cancelled) return;
-      setRetailerInvoicesLoading(false);
       if (error) {
+        setRetailerInvoicesLoading(false);
         toastError(error.message);
         setRetailerInvoices([]);
+        setInvoiceReturnAmountById({});
         return;
       }
-      setRetailerInvoices((data ?? []) as RetailerInvoiceRow[]);
+      const rows = (data ?? []) as RetailerInvoiceRow[];
+      setRetailerInvoices(rows);
+      const ids = rows.map((r) => r.id);
+      let sums: Record<string, number> = {};
+      if (ids.length > 0) {
+        const { data: retData, error: retErr } = await supabase
+          .from("invoice_goods_returns")
+          .select("invoice_id, amount")
+          .in("invoice_id", ids);
+        if (!cancelled && !retErr && retData) {
+          sums = sumGoodsReturnAmountsByInvoiceId(retData as { invoice_id: string; amount?: number | string | null }[]);
+        }
+      }
+      if (cancelled) return;
+      setInvoiceReturnAmountById(sums);
+      setRetailerInvoicesLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [panel, selected?.id]);
+  }, [panel, selected?.id, pathname]);
 
   useEffect(() => {
     const pid = pendingInlineInvoiceIdRef.current;
@@ -658,7 +684,9 @@ export function RetailersScreen({
     let total = 0;
     const cids = new Set<string>();
     for (const inv of retailerInvoices) {
-      total += Number(inv.total_amount ?? 0);
+      const gross = Number(inv.total_amount ?? 0);
+      const ret = invoiceReturnAmountById[inv.id] ?? 0;
+      total += netInvoiceTotalAfterReturns(gross, ret);
       if (inv.company_id) cids.add(inv.company_id);
     }
     return {
@@ -674,6 +702,7 @@ export function RetailersScreen({
     invoiceCountByRetailer,
     companyNamesByRetailer,
     totalAmountByRetailer,
+    invoiceReturnAmountById,
   ]);
 
   const totalInvoicesAcrossRetailers = useMemo(
@@ -822,29 +851,18 @@ export function RetailersScreen({
         <label htmlFor="r-tax-type" className={labelDark}>
           Tax ID type <span className="text-red-400">*</span>
         </label>
-        <div className="relative">
-          <select
-            id="r-tax-type"
-            value={retailerTaxIdType}
-            onChange={(e) => setRetailerTaxIdType(e.target.value === "pan" ? "pan" : "gst")}
-            disabled={saving}
-            className={`${fieldClassDark()} appearance-none pr-9`}
-            style={inputStyle}
-          >
-            <option value="gst">GST</option>
-            <option value="pan">PAN</option>
-          </select>
-          <svg
-            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            aria-hidden
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
-          </svg>
-        </div>
+        <SearchableDropdown
+          id="r-tax-type"
+          value={retailerTaxIdType}
+          onChange={(v) => setRetailerTaxIdType(v === "pan" ? "pan" : "gst")}
+          options={[...TAX_ID_TYPE_OPTIONS]}
+          placeholder="Tax ID type"
+          disabled={saving}
+          showSearch={false}
+          allowClear={false}
+          inputBackground={INPUT_BG}
+          menuZIndex={350}
+        />
       </div>
       <div>
         <label htmlFor="r-gst" className={labelDark}>
@@ -1082,7 +1100,8 @@ export function RetailersScreen({
                         <span className="text-[15px] font-semibold leading-none">₹</span>
                       </StatIconWrap>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Total amount</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Net total</p>
+                        <p className="text-[9px] font-medium uppercase tracking-wider text-zinc-600">After credit notes</p>
                         {retailerViewStats.loading ? (
                           <div className="mt-2 h-7 w-28 max-w-full animate-pulse rounded-md bg-zinc-800/80" aria-hidden />
                         ) : (
@@ -1317,6 +1336,9 @@ export function RetailersScreen({
                               <ul>
                                 {retailerInvoices.map((inv) => {
                                   const coName = companyNameById.get(inv.company_id) ?? "—";
+                                  const gross = Number(inv.total_amount ?? 0);
+                                  const ret = invoiceReturnAmountById[inv.id] ?? 0;
+                                  const net = netInvoiceTotalAfterReturns(gross, ret);
                                   return (
                                     <li
                                       key={inv.id}
@@ -1330,8 +1352,13 @@ export function RetailersScreen({
                                         </p>
                                         <div className="mt-1.5 space-y-0.5">
                                           <p className="font-mono text-sm font-medium tabular-nums text-teal-200">
-                                            Total: {formatInr(Number(inv.total_amount ?? 0))}
+                                            Net total: {formatInr(net)}
                                           </p>
+                                          {ret > 0 ? (
+                                            <p className="text-[11px] leading-snug text-zinc-500">
+                                              Bill {formatInr(gross)} · Credit notes −{formatInr(ret)}
+                                            </p>
+                                          ) : null}
                                           <p className="font-mono text-xs font-medium tabular-nums text-sky-200/90">
                                             Transport: {formatInr(Number(inv.transportation_amount ?? 0))}
                                           </p>

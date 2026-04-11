@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { DatePicker } from "@/components/ui/date-picker";
+import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
@@ -153,6 +154,24 @@ export function InvoiceEditForm({
   }, [invoice.id, retailersProp, transportsProp]);
 
   const retailerMap = useMemo(() => new Map(retailers.map((r) => [r.id, r])), [retailers]);
+
+  const companySelectOptions = useMemo(
+    () =>
+      companies.map((c) => ({
+        value: c.id,
+        label: (c.name ?? "").trim() || "Untitled company",
+      })),
+    [companies]
+  );
+
+  const retailerSelectOptions = useMemo(
+    () =>
+      retailers.map((r) => ({
+        value: r.id,
+        label: (r.name ?? "").trim() || "Untitled retailer",
+      })),
+    [retailers]
+  );
 
   const hydrateFromInvoice = useCallback(
     (inv: RetailerInvoiceRow, tr: InvoiceTransportRow[]) => {
@@ -492,66 +511,32 @@ export function InvoiceEditForm({
             <label className={labelDark} htmlFor="inv-edit-company">
               Company <span className="text-red-400">*</span>
             </label>
-            <div className="relative">
-              <select
-                id="inv-edit-company"
-                value={companyId}
-                onChange={(e) => setCompanyId(e.target.value)}
-                disabled={saving}
-                className={`${fieldClassDark()} appearance-none pr-9`}
-                style={inputStyle}
-              >
-                <option value="">Select company</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <svg
-                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
-              </svg>
-            </div>
+            <SearchableDropdown
+              id="inv-edit-company"
+              value={companyId}
+              onChange={setCompanyId}
+              options={companySelectOptions}
+              placeholder="Select company"
+              searchPlaceholder="Search company…"
+              disabled={saving}
+              inputBackground={INPUT_BG}
+            />
           </div>
 
           <div>
             <label className={labelDark} htmlFor="inv-edit-retailer">
               Retailer <span className="text-red-400">*</span>
             </label>
-            <div className="relative">
-              <select
-                id="inv-edit-retailer"
-                value={retailerId}
-                onChange={(e) => setRetailerId(e.target.value)}
-                disabled={saving}
-                className={`${fieldClassDark()} appearance-none pr-9`}
-                style={inputStyle}
-              >
-                <option value="">Select retailer</option>
-                {retailers.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-              <svg
-                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
-              </svg>
-            </div>
+            <SearchableDropdown
+              id="inv-edit-retailer"
+              value={retailerId}
+              onChange={setRetailerId}
+              options={retailerSelectOptions}
+              placeholder="Select retailer"
+              searchPlaceholder="Search retailer…"
+              disabled={saving}
+              inputBackground={INPUT_BG}
+            />
           </div>
 
           <div>

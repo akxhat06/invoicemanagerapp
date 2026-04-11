@@ -7,6 +7,7 @@ import type {
   InvoiceTransportRow,
   RetailerInvoiceRow,
 } from "@/types/invoice";
+import { netInvoiceTotalAfterReturns } from "@/lib/invoice-net-after-returns";
 import Link from "next/link";
 import { useMemo } from "react";
 
@@ -80,10 +81,12 @@ export function RetailerInvoiceDetailScreen({
   const computed = useMemo(() => {
     const totalPayments = payments.reduce((a, p) => a + Number(p.amount || 0), 0);
     const totalReturns = returns.reduce((a, r) => a + Number(r.amount || 0), 0);
+    const grossTotal = Number(invoice.total_amount || 0);
+    const netAfterReturns = netInvoiceTotalAfterReturns(grossTotal, totalReturns);
     const baseOutstanding = Number(invoice.outstanding_amount || 0);
     const outstanding = Math.max(0, baseOutstanding - totalPayments - totalReturns);
-    return { totalPayments, totalReturns, outstanding };
-  }, [payments, returns, invoice.outstanding_amount]);
+    return { totalPayments, totalReturns, grossTotal, netAfterReturns, outstanding };
+  }, [payments, returns, invoice.outstanding_amount, invoice.total_amount]);
 
   return (
     <div className="space-y-6">
@@ -95,10 +98,15 @@ export function RetailerInvoiceDetailScreen({
         </p>
         <div className="mt-3 grid grid-cols-3 gap-2">
           <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-sm">
-            <p className="text-[11px] uppercase tracking-wider text-zinc-400">Total</p>
+            <p className="text-[11px] uppercase tracking-wider text-zinc-400">Net total</p>
             <p className="mt-1 whitespace-nowrap text-[clamp(0.95rem,3.4vw,1.45rem)] font-semibold tabular-nums leading-tight text-white">
-              {inr(Number(invoice.total_amount))}
+              {inr(computed.netAfterReturns)}
             </p>
+            {computed.totalReturns > 0 ? (
+              <p className="mt-0.5 text-[10px] leading-tight text-zinc-500">
+                Bill {inr(computed.grossTotal)} · −CR {inr(computed.totalReturns)}
+              </p>
+            ) : null}
           </div>
           <div className="min-w-0 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 backdrop-blur-sm">
             <p className="text-[11px] uppercase tracking-wider text-emerald-300/80">Paid</p>

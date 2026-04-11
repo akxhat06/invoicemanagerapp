@@ -49,11 +49,22 @@ function IconInvoices({ className }: { className?: string }) {
   );
 }
 
+function IconCreditNote({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+      <path d="M14 2v6h6M9 14h6M9 18h4" />
+      <path d="M8 11l-2 2 2 2" />
+    </svg>
+  );
+}
+
 const ICONS: Record<DashboardNavKey, typeof IconDashboard> = {
   dashboard: IconDashboard,
   companies: IconCompanies,
   retailers: IconRetailers,
   invoices: IconInvoices,
+  credit_notes: IconCreditNote,
 };
 
 export function DashboardMobileNav({ pathname, invoiceBadgeCount }: Props) {
@@ -74,7 +85,7 @@ export function DashboardMobileNav({ pathname, invoiceBadgeCount }: Props) {
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`flex w-full max-w-[5.25rem] flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-[10px] font-semibold leading-tight transition-colors ${
+                className={`flex w-full min-w-0 max-w-[5.25rem] flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-[10px] font-semibold leading-tight transition-colors ${
                   active
                     ? "bg-zinc-800/90 text-violet-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ring-1 ring-violet-500/25"
                     : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-400"

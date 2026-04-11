@@ -9,8 +9,9 @@ import { toastError, toastSuccess } from "@/lib/toast";
 import { SwipeCompanyRow } from "@/components/companies/swipe-company-row";
 import type { CompanyRow } from "@/types/company";
 import Link from "next/link";
+import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Step = 1 | 2 | 3;
 
@@ -545,6 +546,15 @@ export function CompaniesScreen({ initialCompanies }: Props) {
     router.refresh();
   }
 
+  const stateDropdownOptions = useMemo(
+    () => INDIAN_STATES_AND_UT.map((s) => ({ value: s, label: s })),
+    []
+  );
+  const bankDropdownOptions = useMemo(
+    () => INDIAN_BANKS.map((b) => ({ value: b, label: b })),
+    []
+  );
+
   const panelInput =
     "bg-panel-field text-panel-foreground placeholder:text-panel-muted w-full rounded-lg border border-border px-3.5 py-3 text-[15px] outline-none transition focus:border-amber-600/60 focus:ring-1 focus:ring-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700/80";
 
@@ -842,23 +852,20 @@ export function CompaniesScreen({ initialCompanies }: Props) {
                     <label htmlFor="ac-state" className={panelLabel}>
                       State
                     </label>
-                    <div className="relative">
-                      <select
-                        id="ac-state"
-                        value={state}
-                        onChange={(e) => setState(e.target.value)}
-                        disabled={saving}
-                        className={`${panelInput} appearance-none pr-9`}
-                      >
-                        <option value="">Select</option>
-                        {INDIAN_STATES_AND_UT.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronRightIcon className="text-panel-muted pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rotate-90" />
-                    </div>
+                    <SearchableDropdown
+                      id="ac-state"
+                      value={state}
+                      onChange={setState}
+                      options={stateDropdownOptions}
+                      placeholder="Select"
+                      searchPlaceholder="Search state…"
+                      disabled={saving}
+                      triggerClassName={panelInput}
+                      placeholderClassName="text-panel-muted"
+                      valueClassName="text-panel-foreground"
+                      inputBackground="transparent"
+                      menuZIndex={350}
+                    />
                   </div>
                 </div>
 
@@ -902,23 +909,20 @@ export function CompaniesScreen({ initialCompanies }: Props) {
                   <label htmlFor="b-name" className={panelLabel}>
                     Bank name <span className="text-red-400">*</span>
                   </label>
-                  <div className="relative">
-                    <select
-                      id="b-name"
-                      value={bankName}
-                      onChange={(e) => setBankName(e.target.value)}
-                      disabled={saving}
-                      className={`${panelInput} appearance-none pr-10`}
-                    >
-                      <option value="">Select your bank</option>
-                      {INDIAN_BANKS.map((b) => (
-                        <option key={b} value={b}>
-                          {b}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronRightIcon className="text-panel-muted pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rotate-90" />
-                  </div>
+                  <SearchableDropdown
+                    id="b-name"
+                    value={bankName}
+                    onChange={setBankName}
+                    options={bankDropdownOptions}
+                    placeholder="Select your bank"
+                    searchPlaceholder="Search bank…"
+                    disabled={saving}
+                    triggerClassName={panelInput}
+                    placeholderClassName="text-panel-muted"
+                    valueClassName="text-panel-foreground"
+                    inputBackground="transparent"
+                    menuZIndex={350}
+                  />
                 </div>
 
                 <div>

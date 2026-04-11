@@ -54,11 +54,22 @@ function IconInvoices({ className }: { className?: string }) {
   );
 }
 
+function IconCreditNote({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+      <path d="M14 2v6h6M9 14h6M9 18h4" />
+      <path d="M8 11l-2 2 2 2" />
+    </svg>
+  );
+}
+
 const ICONS: Record<DashboardNavKey, typeof IconDashboard> = {
   dashboard: IconDashboard,
   companies: IconCompanies,
   retailers: IconRetailers,
   invoices: IconInvoices,
+  credit_notes: IconCreditNote,
 };
 
 const ACCENT = "#c4b5fd";

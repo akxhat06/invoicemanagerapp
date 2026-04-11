@@ -5,6 +5,7 @@ import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { InvoicePaymentRow, RetailerInvoiceRow } from "@/types/invoice";
 import { DatePicker } from "@/components/ui/date-picker";
+import { SearchableDropdown, type SearchableDropdownOption } from "@/components/ui/searchable-dropdown";
 import { useEffect, useMemo, useState } from "react";
 
 type Props = {
@@ -32,6 +33,14 @@ function todayISODate() {
 
 const inputCls =
   "bg-panel-field text-panel-foreground w-full rounded-lg border border-border px-3 py-2.5 text-sm outline-none focus:border-amber-500/60";
+
+const PAYMENT_METHOD_OPTIONS: SearchableDropdownOption[] = [
+  { value: "UPI", label: "UPI" },
+  { value: "NEFT", label: "NEFT" },
+  { value: "Cheque", label: "Cheque" },
+  { value: "Cash", label: "Cash" },
+  { value: "Other", label: "Other" },
+];
 
 export function PaymentsScreen({ initialPayments, initialInvoices, preselectedInvoiceId }: Props) {
   const [payments, setPayments] = useState(initialPayments);
@@ -69,6 +78,15 @@ export function PaymentsScreen({ initialPayments, initialInvoices, preselectedIn
           `${i.retailer_name?.trim() || "Retailer"} · ${i.invoice_number}`,
         ])
       ),
+    [invoices]
+  );
+
+  const invoiceSelectOptions = useMemo(
+    () =>
+      invoices.map((i) => ({
+        value: i.id,
+        label: `${i.retailer_name?.trim() || "Retailer"} · ${i.invoice_number}`,
+      })),
     [invoices]
   );
 
@@ -239,22 +257,34 @@ export function PaymentsScreen({ initialPayments, initialInvoices, preselectedIn
           <button type="button" onClick={() => !saving && setAddOpen(false)} className="rounded-lg p-2 hover:bg-black/5 dark:hover:bg-white/10">✕</button>
         </div>
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-          <select className={inputCls} value={invoiceId} onChange={(e) => setInvoiceId(e.target.value)} disabled={saving}>
-            <option value="">Select invoice</option>
-            {invoices.map((i) => (
-              <option key={i.id} value={i.id}>
-                {invoiceMap.get(i.id)}
-              </option>
-            ))}
-          </select>
+          <SearchableDropdown
+            value={invoiceId}
+            onChange={setInvoiceId}
+            options={invoiceSelectOptions}
+            placeholder="Select invoice"
+            searchPlaceholder="Search invoice…"
+            disabled={saving}
+            triggerClassName={inputCls}
+            placeholderClassName="text-muted-foreground"
+            valueClassName="text-foreground"
+            inputBackground="transparent"
+            menuZIndex={350}
+          />
           <DatePicker value={paymentDate} onChange={setPaymentDate} disabled={saving} className={inputCls} />
-          <select className={inputCls} value={method} onChange={(e) => setMethod(e.target.value as InvoicePaymentRow["method"])} disabled={saving}>
-            <option>UPI</option>
-            <option>NEFT</option>
-            <option>Cheque</option>
-            <option>Cash</option>
-            <option>Other</option>
-          </select>
+          <SearchableDropdown
+            value={method}
+            onChange={(v) => setMethod(v as InvoicePaymentRow["method"])}
+            options={PAYMENT_METHOD_OPTIONS}
+            placeholder="Method"
+            disabled={saving}
+            showSearch={false}
+            allowClear={false}
+            triggerClassName={inputCls}
+            placeholderClassName="text-muted-foreground"
+            valueClassName="text-foreground"
+            inputBackground="transparent"
+            menuZIndex={350}
+          />
           <input className={inputCls} placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={saving} />
           <input className={inputCls} placeholder="Cheque No" value={chequeNo} onChange={(e) => setChequeNo(e.target.value)} disabled={saving} />
           <input className={inputCls} placeholder="UPI No" value={upiNo} onChange={(e) => setUpiNo(e.target.value)} disabled={saving} />

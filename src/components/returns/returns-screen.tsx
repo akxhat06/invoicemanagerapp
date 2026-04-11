@@ -5,6 +5,7 @@ import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { InvoiceGoodsReturnRow, RetailerInvoiceRow } from "@/types/invoice";
 import { DatePicker } from "@/components/ui/date-picker";
+import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { useEffect, useMemo, useState } from "react";
 
 type Props = {
@@ -57,6 +58,15 @@ export function ReturnsScreen({ initialReturns, initialInvoices, preselectedInvo
       new Map(
         invoices.map((i) => [i.id, `${i.retailer_name?.trim() || "Retailer"} · ${i.invoice_number}`])
       ),
+    [invoices]
+  );
+
+  const invoiceSelectOptions = useMemo(
+    () =>
+      invoices.map((i) => ({
+        value: i.id,
+        label: `${i.retailer_name?.trim() || "Retailer"} · ${i.invoice_number}`,
+      })),
     [invoices]
   );
 
@@ -192,14 +202,19 @@ export function ReturnsScreen({ initialReturns, initialInvoices, preselectedInvo
           <button type="button" onClick={() => !saving && setAddOpen(false)} className="rounded-lg p-2 hover:bg-black/5 dark:hover:bg-white/10">✕</button>
         </div>
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-          <select className={inputCls} value={invoiceId} onChange={(e) => setInvoiceId(e.target.value)} disabled={saving}>
-            <option value="">Select invoice</option>
-            {invoices.map((i) => (
-              <option key={i.id} value={i.id}>
-                {invoiceMap.get(i.id)}
-              </option>
-            ))}
-          </select>
+          <SearchableDropdown
+            value={invoiceId}
+            onChange={setInvoiceId}
+            options={invoiceSelectOptions}
+            placeholder="Select invoice"
+            searchPlaceholder="Search invoice…"
+            disabled={saving}
+            triggerClassName={inputCls}
+            placeholderClassName="text-muted-foreground"
+            valueClassName="text-foreground"
+            inputBackground="transparent"
+            menuZIndex={350}
+          />
           <DatePicker value={returnDate} onChange={setReturnDate} disabled={saving} className={inputCls} />
           <input className={inputCls} placeholder="Return amount" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={saving} />
           <input className={inputCls} placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} disabled={saving} />

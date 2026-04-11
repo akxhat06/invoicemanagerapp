@@ -8,7 +8,8 @@ import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
 import type { RetailerInvoiceRow } from "@/types/invoice";
 import { useWorkspaceUiSession } from "@/hooks/use-workspace-ui-session";
-import { useRouter } from "next/navigation";
+import { sumGoodsReturnAmountsByInvoiceId, netInvoiceTotalAfterReturns } from "@/lib/invoice-net-after-returns";
+import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 type Props = {
@@ -286,6 +287,7 @@ export function CompaniesWorkspace({
   initialInvoiceCountByCompany = {},
   initialTotalAmountByCompany = {},
 }: Props) {
+  const pathname = usePathname();
   const router = useRouter();
   const [companies, setCompanies] = useState<CompanyRow[]>(initialCompanies);
   const [panel, setPanel] = useState<PanelMode>("closed");
@@ -301,6 +303,7 @@ export function CompaniesWorkspace({
 
   const [companyInvoices, setCompanyInvoices] = useState<RetailerInvoiceRow[]>([]);
   const [companyInvoicesLoading, setCompanyInvoicesLoading] = useState(false);
+  const [invoiceReturnAmountById, setInvoiceReturnAmountById] = useState<Record<string, number>>({});
   const [invoiceDeleteTarget, setInvoiceDeleteTarget] = useState<RetailerInvoiceRow | null>(null);
   const [invoiceDeleting, setInvoiceDeleting] = useState(false);
   /** When set, company sheet shows inline invoice editor instead of the invoice list. */
@@ -345,6 +348,7 @@ export function CompaniesWorkspace({
   useEffect(() => {
     if (panel !== "view" || !selected) {
       setCompanyInvoices([]);
+      setInvoiceReturnAmountById({});
       setCompanyInvoicesLoading(false);
       return;
     }
@@ -358,18 +362,34 @@ export function CompaniesWorkspace({
         .eq("company_id", selected.id)
         .order("bill_date", { ascending: false });
       if (cancelled) return;
-      setCompanyInvoicesLoading(false);
       if (error) {
+        setCompanyInvoicesLoading(false);
         toastError(error.message);
         setCompanyInvoices([]);
+        setInvoiceReturnAmountById({});
         return;
       }
-      setCompanyInvoices((data ?? []) as RetailerInvoiceRow[]);
+      const rows = (data ?? []) as RetailerInvoiceRow[];
+      setCompanyInvoices(rows);
+      const ids = rows.map((r) => r.id);
+      let sums: Record<string, number> = {};
+      if (ids.length > 0) {
+        const { data: retData, error: retErr } = await supabase
+          .from("invoice_goods_returns")
+          .select("invoice_id, amount")
+          .in("invoice_id", ids);
+        if (!cancelled && !retErr && retData) {
+          sums = sumGoodsReturnAmountsByInvoiceId(retData as { invoice_id: string; amount?: number | string | null }[]);
+        }
+      }
+      if (cancelled) return;
+      setInvoiceReturnAmountById(sums);
+      setCompanyInvoicesLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [panel, selected?.id]);
+  }, [panel, selected?.id, pathname]);
 
   useEffect(() => {
     const pid = pendingInlineInvoiceIdRef.current;
@@ -879,7 +899,9 @@ export function CompaniesWorkspace({
     let total = 0;
     const retailerKeys = new Set<string>();
     for (const inv of companyInvoices) {
-      total += Number(inv.total_amount ?? 0);
+      const gross = Number(inv.total_amount ?? 0);
+      const ret = invoiceReturnAmountById[inv.id] ?? 0;
+      total += netInvoiceTotalAfterReturns(gross, ret);
       if (inv.retailer_id) {
         retailerKeys.add(`id:${inv.retailer_id}`);
       } else if (inv.retailer_name?.trim()) {
@@ -892,7 +914,7 @@ export function CompaniesWorkspace({
       retailerCount: retailerKeys.size,
       totalAmount: total,
     };
-  }, [companyInvoices, companyInvoicesLoading]);
+  }, [companyInvoices, companyInvoicesLoading, invoiceReturnAmountById]);
 
   const inputStyle = { backgroundColor: INPUT_BG } as React.CSSProperties;
 
@@ -1138,7 +1160,8 @@ export function CompaniesWorkspace({
                             <span className="text-[15px] font-semibold leading-none">₹</span>
                           </StatIconWrap>
                           <div className="min-w-0 flex-1">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Total amount</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Net total</p>
+                            <p className="text-[9px] font-medium uppercase tracking-wider text-zinc-600">After credit notes</p>
                             {companyViewStats.loading ? (
                               <div className="mt-2 h-7 w-28 max-w-full animate-pulse rounded-md bg-zinc-800/80" aria-hidden />
                             ) : (
@@ -1359,7 +1382,11 @@ export function CompaniesWorkspace({
                               </div>
                             ) : (
                               <ul>
-                                {companyInvoices.map((inv) => (
+                                {companyInvoices.map((inv) => {
+                                  const gross = Number(inv.total_amount ?? 0);
+                                  const ret = invoiceReturnAmountById[inv.id] ?? 0;
+                                  const net = netInvoiceTotalAfterReturns(gross, ret);
+                                  return (
                                   <li
                                     key={inv.id}
                                     className="flex flex-wrap items-center gap-3 border-b border-zinc-800/45 px-3 py-4 transition-colors last:border-b-0 hover:bg-zinc-900/45 sm:flex-nowrap sm:px-4"
@@ -1373,8 +1400,13 @@ export function CompaniesWorkspace({
                                       </p>
                                       <div className="mt-1.5 space-y-0.5">
                                         <p className="font-mono text-sm font-medium tabular-nums text-teal-200">
-                                          Total: {formatInr(Number(inv.total_amount ?? 0))}
+                                          Net total: {formatInr(net)}
                                         </p>
+                                        {ret > 0 ? (
+                                          <p className="text-[11px] leading-snug text-zinc-500">
+                                            Bill {formatInr(gross)} · Credit notes −{formatInr(ret)}
+                                          </p>
+                                        ) : null}
                                         <p className="font-mono text-xs font-medium tabular-nums text-sky-200/90">
                                           Transport: {formatInr(Number(inv.transportation_amount ?? 0))}
                                         </p>
@@ -1397,7 +1429,8 @@ export function CompaniesWorkspace({
                                       </button>
                                     </div>
                                   </li>
-                                ))}
+                                );
+                                })}
                               </ul>
                             )}
                           </ViewSectionCard>

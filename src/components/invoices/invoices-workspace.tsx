@@ -7,7 +7,9 @@ import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
 import type { RetailerInvoiceRow } from "@/types/invoice";
 import type { RetailerRow } from "@/types/retailer";
+import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { useWorkspaceUiSession } from "@/hooks/use-workspace-ui-session";
+import { netInvoiceTotalAfterReturns } from "@/lib/invoice-net-after-returns";
 import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type TransitionEvent } from "react";
 
@@ -15,12 +17,14 @@ type Props = {
   initialInvoices: RetailerInvoiceRow[];
   initialCompanies: CompanyRow[];
   initialRetailers: RetailerRow[];
+  /** Sum of `invoice_goods_returns.amount` per invoice id. */
+  initialReturnAmountByInvoiceId?: Record<string, number>;
 };
 
 type PanelMode = "closed" | "add";
 
-type InvoicesUiSessionV1 = {
-  v: 1;
+type InvoicesUiSessionV2 = {
+  v: 2;
   panel: PanelMode;
   addStep: 1 | 2;
   companyId: string;
@@ -226,11 +230,18 @@ function InvoiceAddStepper({ step }: { step: 1 | 2 }) {
   );
 }
 
-export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRetailers }: Props) {
+export function InvoicesWorkspace({
+  initialInvoices,
+  initialCompanies,
+  initialRetailers,
+  initialReturnAmountByInvoiceId = {},
+}: Props) {
   const router = useRouter();
   const [invoices, setInvoices] = useState<RetailerInvoiceRow[]>(initialInvoices);
   const [companies] = useState<CompanyRow[]>(initialCompanies);
   const [retailers] = useState<RetailerRow[]>(initialRetailers);
+  const [returnAmountByInvoiceId, setReturnAmountByInvoiceId] =
+    useState<Record<string, number>>(initialReturnAmountByInvoiceId);
 
   const [panel, setPanel] = useState<PanelMode>("closed");
   const prevPanelRef = useRef<PanelMode>("closed");
@@ -254,14 +265,39 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
   const [lrDate, setLrDate] = useState(todayISODate());
   const [transportAmount, setTransportAmount] = useState("");
 
+  /** When true, next `openAdd` keeps restored draft instead of calling `resetForm`. */
+  const skipResetOnOpenAddRef = useRef(false);
+
   const inputStyle = { backgroundColor: INPUT_BG } as CSSProperties;
 
   useEffect(() => {
     setInvoices(initialInvoices);
   }, [initialInvoices]);
 
+  useEffect(() => {
+    setReturnAmountByInvoiceId(initialReturnAmountByInvoiceId);
+  }, [initialReturnAmountByInvoiceId]);
+
   const companyMap = useMemo(() => new Map(companies.map((c) => [c.id, c.name])), [companies]);
   const retailerMap = useMemo(() => new Map(retailers.map((r) => [r.id, r])), [retailers]);
+
+  const companySelectOptions = useMemo(
+    () =>
+      companies.map((c) => ({
+        value: c.id,
+        label: (c.name ?? "").trim() || "Untitled company",
+      })),
+    [companies]
+  );
+
+  const retailerSelectOptions = useMemo(
+    () =>
+      retailers.map((r) => ({
+        value: r.id,
+        label: (r.name ?? "").trim() || "Untitled retailer",
+      })),
+    [retailers]
+  );
 
   const resetForm = useCallback(() => {
     setCompanyId("");
@@ -280,14 +316,15 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
   }, []);
 
   const applyInvoicesUiSession = useCallback(
-    (s: InvoicesUiSessionV1) => {
+    (s: InvoicesUiSessionV2) => {
+      skipResetOnOpenAddRef.current = false;
+      setPanel("closed");
       if (s.panel === "closed") {
-        setPanel("closed");
         resetForm();
         setAddStep(1);
         return;
       }
-      setPanel("add");
+      skipResetOnOpenAddRef.current = true;
       setAddStep(s.addStep ?? 1);
       setCompanyId(s.companyId ?? "");
       setRetailerId(s.retailerId ?? "");
@@ -306,12 +343,12 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
     [resetForm]
   );
 
-  useWorkspaceUiSession<InvoicesUiSessionV1>({
+  useWorkspaceUiSession<InvoicesUiSessionV2>({
     route: "invoices",
-    version: 1,
+    version: 2,
     restoreReady: true,
     buildSnapshot: () => ({
-      v: 1,
+      v: 2,
       panel,
       addStep,
       companyId,
@@ -372,6 +409,15 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
     }
   }
 
+  /** If `transitionend` never fires (browser quirks), avoid leaving an invisible z-100 scrim that blocks all clicks. */
+  useEffect(() => {
+    if (sheetOpen || !isAnimatingClose.current) return;
+    const t = window.setTimeout(() => {
+      if (isAnimatingClose.current && !sheetOpenRef.current) finalizeClose();
+    }, 550);
+    return () => window.clearTimeout(t);
+  }, [sheetOpen, finalizeClose]);
+
   useEffect(() => {
     const prev = prevPanelRef.current;
     prevPanelRef.current = panel;
@@ -404,8 +450,11 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
       toastError("Add a retailer first.");
       return;
     }
-    resetForm();
-    setAddStep(1);
+    if (!skipResetOnOpenAddRef.current) {
+      resetForm();
+      setAddStep(1);
+    }
+    skipResetOnOpenAddRef.current = false;
     setPanel("add");
   };
 
@@ -604,17 +653,22 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
     [invoices]
   );
   const invoiceTotals = useMemo(() => {
-    let totalAmount = 0;
+    let totalBillAmount = 0;
     let totalTransportAmount = 0;
+    let totalGoodsReturnAmount = 0;
     for (const inv of sortedInvoices) {
-      totalAmount += Number(inv.total_amount ?? 0);
+      const gross = Number(inv.total_amount ?? 0);
+      totalBillAmount += gross;
       totalTransportAmount += Number(inv.transportation_amount ?? 0);
+      totalGoodsReturnAmount += returnAmountByInvoiceId[inv.id] ?? 0;
     }
     return {
-      totalAmount: round2(totalAmount),
+      totalBillAmount: round2(totalBillAmount),
       totalTransportAmount: round2(totalTransportAmount),
+      totalGoodsReturnAmount: round2(totalGoodsReturnAmount),
+      netAfterReturns: round2(netInvoiceTotalAfterReturns(totalBillAmount, totalGoodsReturnAmount)),
     };
-  }, [sortedInvoices]);
+  }, [sortedInvoices, returnAmountByInvoiceId]);
 
   const computedBasicAmountPreview = useMemo(() => round2(toNum(basicAmount)), [basicAmount]);
   const computedCdAmountPreview = useMemo(
@@ -673,66 +727,32 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
         <label className={labelDark} htmlFor="inv-company">
           Company <span className="text-red-400">*</span>
         </label>
-        <div className="relative">
-          <select
-            id="inv-company"
-            value={companyId}
-            onChange={(e) => setCompanyId(e.target.value)}
-            disabled={saving}
-            className={`${fieldClassDark()} appearance-none pr-9`}
-            style={inputStyle}
-          >
-            <option value="">Select company</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <svg
-            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            aria-hidden
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
-          </svg>
-        </div>
+        <SearchableDropdown
+          id="inv-company"
+          value={companyId}
+          onChange={setCompanyId}
+          options={companySelectOptions}
+          placeholder="Select company"
+          searchPlaceholder="Search company…"
+          disabled={saving}
+          inputBackground={INPUT_BG}
+        />
       </div>
 
       <div>
         <label className={labelDark} htmlFor="inv-retailer">
           Retailer <span className="text-red-400">*</span>
         </label>
-        <div className="relative">
-          <select
-            id="inv-retailer"
-            value={retailerId}
-            onChange={(e) => setRetailerId(e.target.value)}
-            disabled={saving}
-            className={`${fieldClassDark()} appearance-none pr-9`}
-            style={inputStyle}
-          >
-            <option value="">Select retailer</option>
-            {retailers.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-          <svg
-            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            aria-hidden
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
-          </svg>
-        </div>
+        <SearchableDropdown
+          id="inv-retailer"
+          value={retailerId}
+          onChange={setRetailerId}
+          options={retailerSelectOptions}
+          placeholder="Select retailer"
+          searchPlaceholder="Search retailer…"
+          disabled={saving}
+          inputBackground={INPUT_BG}
+        />
       </div>
 
       <div>
@@ -965,17 +985,41 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
                 <InvoiceDocGlyph className="h-3.5 w-3.5 opacity-90" />
                 {sortedInvoices.length} invoice{sortedInvoices.length === 1 ? "" : "s"}
               </span>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 p-3 ring-1 ring-amber-500/10">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-500">Total amount</p>
-                  <p className="mt-1 font-mono text-sm font-semibold tabular-nums text-amber-100">
-                    {formatInr(invoiceTotals.totalAmount)}
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+                <div className="min-w-0 rounded-lg border border-amber-500/20 bg-amber-950/20 p-2 ring-1 ring-amber-500/10 sm:rounded-xl sm:p-3">
+                  <p className="truncate text-[8px] font-semibold uppercase tracking-wide text-zinc-500 sm:text-[10px] sm:tracking-[0.1em]">
+                    <span className="sm:hidden">Total</span>
+                    <span className="hidden sm:inline">Total amount</span>
+                  </p>
+                  <p className="mt-0.5 hidden text-[10px] leading-snug text-zinc-600 sm:block">Invoice bill totals</p>
+                  <p className="mt-1 font-mono text-[11px] font-semibold tabular-nums leading-none text-amber-100 sm:text-sm">
+                    {formatInr(invoiceTotals.totalBillAmount)}
+                  </p>
+                  {invoiceTotals.totalGoodsReturnAmount > 0 ? (
+                    <p className="mt-1 border-t border-amber-500/15 pt-1 text-[7px] leading-tight text-zinc-500 sm:mt-1.5 sm:pt-1.5 sm:text-[10px] sm:leading-snug">
+                      <span className="hidden sm:inline">Net after credit notes </span>
+                      <span className="sm:hidden">Net </span>
+                      <span className="font-mono font-semibold text-amber-200/90">{formatInr(invoiceTotals.netAfterReturns)}</span>
+                    </p>
+                  ) : null}
+                </div>
+                <div className="min-w-0 rounded-lg border border-sky-500/20 bg-sky-950/20 p-2 ring-1 ring-sky-500/10 sm:rounded-xl sm:p-3">
+                  <p className="truncate text-[8px] font-semibold uppercase tracking-wide text-zinc-500 sm:text-[10px] sm:tracking-[0.1em]">
+                    <span className="sm:hidden">Transport</span>
+                    <span className="hidden sm:inline">Transport amount</span>
+                  </p>
+                  <p className="mt-1 font-mono text-[11px] font-semibold tabular-nums leading-none text-sky-200 sm:text-sm">
+                    {formatInr(invoiceTotals.totalTransportAmount)}
                   </p>
                 </div>
-                <div className="rounded-xl border border-sky-500/20 bg-sky-950/20 p-3 ring-1 ring-sky-500/10">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-500">Transport amount</p>
-                  <p className="mt-1 font-mono text-sm font-semibold tabular-nums text-sky-200">
-                    {formatInr(invoiceTotals.totalTransportAmount)}
+                <div className="min-w-0 rounded-lg border border-rose-500/20 bg-rose-950/20 p-2 ring-1 ring-rose-500/10 sm:rounded-xl sm:p-3">
+                  <p className="truncate text-[8px] font-semibold uppercase tracking-wide text-zinc-500 sm:text-[10px] sm:tracking-[0.1em]">
+                    <span className="sm:hidden">Returns</span>
+                    <span className="hidden sm:inline">Goods return amount</span>
+                  </p>
+                  <p className="mt-0.5 hidden text-[10px] leading-snug text-zinc-600 sm:block">Total credit notes</p>
+                  <p className="mt-1 font-mono text-[11px] font-semibold tabular-nums leading-none text-rose-100 sm:text-sm">
+                    {formatInr(invoiceTotals.totalGoodsReturnAmount)}
                   </p>
                 </div>
               </div>
@@ -1008,6 +1052,9 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
           {sortedInvoices.map((inv) => {
             const co = companyMap.get(inv.company_id) ?? "—";
             const q = Math.max(1, Math.floor(Number(inv.quantity ?? 1)));
+            const gross = Number(inv.total_amount ?? 0);
+            const ret = returnAmountByInvoiceId[inv.id] ?? 0;
+            const net = netInvoiceTotalAfterReturns(gross, ret);
             return (
               <li key={inv.id}>
                 <div className="flex w-full items-stretch overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-950/95 to-zinc-900/50 text-left shadow-[0_4px_24px_rgba(0,0,0,0.35)] ring-1 ring-white/[0.03]">
@@ -1030,9 +1077,14 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
                     </div>
                     <div className="flex shrink-0 flex-col items-end">
                       <span className="font-mono text-sm font-semibold tabular-nums tracking-tight text-amber-200 sm:text-[15px]">
-                        {formatInr(Number(inv.total_amount ?? 0))}
+                        {formatInr(net)}
                       </span>
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Total</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Net total</span>
+                      {ret > 0 ? (
+                        <span className="mt-0.5 max-w-[9rem] text-right text-[10px] leading-tight text-zinc-500">
+                          Bill {formatInr(gross)} · −CR {formatInr(ret)}
+                        </span>
+                      ) : null}
                       <span className="mt-0.5 font-mono text-[11px] font-medium tabular-nums text-sky-200/90">
                         {formatInr(Number(inv.transportation_amount ?? 0))}
                       </span>
@@ -1064,20 +1116,21 @@ export function InvoicesWorkspace({ initialInvoices, initialCompanies, initialRe
           <button
             type="button"
             aria-label="Close"
-            className={`fixed inset-0 z-[85] bg-black/60 transition-opacity duration-300 ${sheetOpen ? "opacity-100" : "opacity-0"}`}
+            className={`fixed inset-0 z-[100] bg-black/60 transition-opacity duration-300 ${
+              sheetOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+            }`}
             onClick={() => !saving && requestClose()}
           />
           <div
-            className="fixed inset-x-0 bottom-0 top-12 z-[90] flex min-h-0 max-h-[100dvh] flex-col rounded-t-3xl border border-zinc-700/90 bg-[#16181f] shadow-[0_-12px_40px_rgba(0,0,0,0.45)] md:left-auto md:right-0 md:top-0 md:max-h-none md:w-full md:max-w-lg md:rounded-none md:rounded-l-3xl md:border-l md:border-t-0"
+            className={`fixed inset-0 z-[101] flex min-h-0 flex-col border-zinc-700/90 bg-[#16181f] pt-[env(safe-area-inset-top)] shadow-[0_-12px_40px_rgba(0,0,0,0.45)] transition-transform duration-[380ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform max-md:rounded-t-3xl max-md:border max-md:border-b-0 md:inset-y-0 md:left-auto md:right-0 md:w-full md:max-w-lg md:rounded-none md:rounded-l-3xl md:border md:border-l md:border-t-0 md:pt-0 md:shadow-[-12px_0_40px_rgba(0,0,0,0.45)] ${
+              sheetOpen
+                ? "pointer-events-auto translate-y-0 md:translate-x-0"
+                : "pointer-events-none translate-y-full md:translate-y-0 md:translate-x-full"
+            }`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="invoice-sheet-title"
             onTransitionEnd={handleSheetTransitionEnd}
-            style={{
-              transform: sheetOpen ? "translateY(0)" : "translateY(100%)",
-              transition: "transform 380ms cubic-bezier(0.22, 1, 0.36, 1)",
-              willChange: "transform",
-            }}
           >
             <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-zinc-600 md:hidden" aria-hidden />
             <div className="flex shrink-0 items-center gap-3 border-b border-zinc-700/80 bg-gradient-to-b from-[#181a22] to-[#16181f] px-4 py-3.5">

@@ -26,7 +26,7 @@ const STEPS = [
   },
   {
     title: "Navigation",
-    body: "Use the bar at the bottom to switch between Dashboard, Companies, Retailers, and Invoices. On larger screens, the same links appear in the left sidebar. Open your profile from the avatar for account actions.",
+    body: "Use the bar at the bottom to switch between Dashboard, Companies, Retailers, Invoices, and Credit Note. On larger screens, the same links appear in the left sidebar. Open your profile from the avatar for account actions.",
     target: "[data-tour='bottom-nav']",
     placement: "above-target" as const,
   },

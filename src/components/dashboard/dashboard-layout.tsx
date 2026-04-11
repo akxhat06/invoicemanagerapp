@@ -22,6 +22,7 @@ function getHeaderTitle(pathname: string): string {
   if (pathname.startsWith("/companies")) return "Companies";
   if (pathname.startsWith("/retailers")) return "Retailers";
   if (pathname.startsWith("/invoices")) return "Invoices";
+  if (pathname.startsWith("/credit-notes")) return "Credit Note";
   if (pathname.startsWith("/profile")) return "Profile";
   return "Dashboard";
 }

@@ -46,6 +46,8 @@ export type InvoiceGoodsReturnRow = {
   invoice_id: string;
   return_date: string;
   amount: number;
+  /** Units returned; capped by invoice quantity. */
+  quantity_returned?: number | null;
   note: string | null;
   created_at: string;
   updated_at: string;
