@@ -194,12 +194,13 @@ export function InvoiceEditForm({
 
   const invoiceMaxQty = useMemo(() => Math.max(1, parseQuantityInput(quantity) || 1), [quantity]);
 
+  /** Sum of saved payment rows except the one open in the form (so we don’t double-count the draft). */
   const paymentOtherTotal = useMemo(
     () =>
       round2(
         invoicePayments
           .filter((p) => p.id !== paymentEditingId)
-          .reduce((a, p) => a + Number(p.amount ?? 0), 0)
+          .reduce((a, p) => a + coerceGoodsReturnAmountFromDb(p.amount), 0)
       ),
     [invoicePayments, paymentEditingId]
   );
@@ -208,26 +209,21 @@ export function InvoiceEditForm({
 
   const invoiceTotalForPayment = useMemo(() => round2(Number(invoice.total_amount ?? 0)), [invoice.total_amount]);
 
-  const oldPaymentEntryAmount = useMemo(() => {
-    if (!paymentEditingId) return 0;
-    const row = invoicePayments.find((p) => p.id === paymentEditingId);
-    return round2(Number(row?.amount ?? 0));
-  }, [paymentEditingId, invoicePayments]);
-
-  const payOutstandingBefore = useMemo(
-    () => Math.max(0, round2(invoiceTotalForPayment - paymentOtherTotal - oldPaymentEntryAmount)),
-    [invoiceTotalForPayment, paymentOtherTotal, oldPaymentEntryAmount]
+  /** Paid total if you save the amount currently in the form (other rows + this line). */
+  const payTotalAsInForm = useMemo(
+    () => round2(paymentOtherTotal + payDraftAmount),
+    [paymentOtherTotal, payDraftAmount]
   );
 
-  const payOutstandingAfter = useMemo(
-    () => Math.max(0, round2(invoiceTotalForPayment - paymentOtherTotal - payDraftAmount)),
-    [invoiceTotalForPayment, paymentOtherTotal, payDraftAmount]
+  const payOutstandingRemaining = useMemo(
+    () => Math.max(0, round2(invoiceTotalForPayment - payTotalAsInForm)),
+    [invoiceTotalForPayment, payTotalAsInForm]
   );
 
-  const payExceedsOutstanding = useMemo(() => {
-    if (payDraftAmount <= 0) return false;
-    return payDraftAmount > payOutstandingBefore + 0.005;
-  }, [payDraftAmount, payOutstandingBefore]);
+  const payExceedsBill = useMemo(
+    () => payTotalAsInForm > invoiceTotalForPayment + 0.005,
+    [payTotalAsInForm, invoiceTotalForPayment]
+  );
 
   useEffect(() => {
     if (retailersProp) setRetailers(retailersProp);
@@ -391,7 +387,7 @@ export function InvoiceEditForm({
     setPaymentEditingId(row.id);
     setPaymentDate((row.payment_date || todayISODate()).slice(0, 10));
     setPaymentMethod(row.method);
-    setPaymentAmount(String(round2(Number(row.amount ?? 0))));
+    setPaymentAmount(String(round2(coerceGoodsReturnAmountFromDb(row.amount))));
     setPayChequeNo(row.cheque_no ?? "");
     setPayUpiNo(row.upi_no ?? "");
     setPayUpiRefNo(row.upi_ref_no ?? "");
@@ -429,6 +425,10 @@ export function InvoiceEditForm({
         paymentListLoadedForInvoiceRef.current = invoiceId;
         if (rows.length >= 1) {
           startEditPayment(rows[0]);
+        } else {
+          setPaymentEditingId(null);
+          const out = round2(Number(invoice.outstanding_amount ?? 0));
+          setPaymentAmount(out > 0 ? String(out) : "");
         }
       }
     })();
@@ -1297,7 +1297,7 @@ export function InvoiceEditForm({
           </div>
         </form>
         ) : (
-        <form id="invoice-payment-form" className="space-y-5 pb-4" onSubmit={(e) => void savePaymentInline(e)}>
+        <form id="invoice-payment-form" className="space-y-5 pb-28 sm:pb-32" onSubmit={(e) => void savePaymentInline(e)}>
           <div className={SECTION_WRAP}>
             <h3 className={SECTION_TITLE}>Payments</h3>
             <p className="mb-4 text-xs leading-relaxed text-zinc-500">
@@ -1333,7 +1333,7 @@ export function InvoiceEditForm({
                         >
                           <div className="min-w-0">
                             <p className="font-mono text-sm font-medium text-zinc-200">
-                              {formatInr(round2(Number(p.amount ?? 0)))}
+                              {formatInr(round2(coerceGoodsReturnAmountFromDb(p.amount)))}
                             </p>
                             <p className="text-xs text-zinc-500">
                               {(p.payment_date || "").slice(0, 10)}
@@ -1357,18 +1357,21 @@ export function InvoiceEditForm({
                 )}
 
                 <div className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-4 ring-1 ring-emerald-500/10">
-                  <div className="mb-3 space-y-2 text-sm">
+                  <div className="space-y-2 text-sm">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-zinc-500">Invoice amount</span>
+                      <span className="text-zinc-500">Invoice total (bill)</span>
                       <span className="font-mono font-semibold tabular-nums text-zinc-100">{formatInr(invoiceTotalForPayment)}</span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-zinc-500">Paid (other entries)</span>
-                      <span className="font-mono tabular-nums text-zinc-200">{formatInr(paymentOtherTotal)}</span>
+                      <span className="text-zinc-500">Paid</span>
+                      <span className="font-mono tabular-nums text-emerald-200/95">{formatInr(payTotalAsInForm)}</span>
                     </div>
+                    <p className="text-[10px] leading-snug text-zinc-600">
+                      Includes the payment amount below (updates as you type).
+                    </p>
                     <div className="flex items-center justify-between gap-3 border-t border-zinc-700/50 pt-2">
-                      <span className="text-zinc-500">Outstanding (before this payment)</span>
-                      <span className="font-mono font-semibold tabular-nums text-zinc-100">{formatInr(payOutstandingBefore)}</span>
+                      <span className="text-zinc-500">Outstanding</span>
+                      <span className="font-mono font-semibold tabular-nums text-zinc-100">{formatInr(payOutstandingRemaining)}</span>
                     </div>
                   </div>
                 </div>
@@ -1408,23 +1411,13 @@ export function InvoiceEditForm({
                       value={paymentAmount}
                       onChange={(e) => setPaymentAmount(e.target.value)}
                       disabled={savingPayment}
-                      placeholder="0.00"
+                      placeholder="Enter amount"
                     />
-                    <div className="mt-2 space-y-1">
-                      <div className="flex items-center justify-between gap-3 text-sm">
-                        <span className="text-zinc-500">Outstanding after save</span>
-                        <span
-                          className={`font-mono font-semibold tabular-nums ${
-                            payExceedsOutstanding ? "text-amber-400" : "text-zinc-100"
-                          }`}
-                        >
-                          {formatInr(payOutstandingAfter)}
-                        </span>
-                      </div>
-                      {payExceedsOutstanding ? (
-                        <p className="text-xs text-amber-400/90">This payment is more than the current outstanding balance.</p>
-                      ) : null}
-                    </div>
+                    {payExceedsBill ? (
+                      <p className="mt-2 text-xs text-amber-400/90">
+                        Total paid would be more than the bill amount. Reduce the payment or check the invoice total.
+                      </p>
+                    ) : null}
                   </div>
                   <div>
                     <label className={labelDark} htmlFor="inv-pay-cheque">
