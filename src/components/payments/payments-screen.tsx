@@ -3,11 +3,12 @@
 import { createClient } from "@/lib/supabase/client";
 import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { netInvoiceTotalAfterReturns } from "@/lib/invoice-net-after-returns";
+import { paymentReferenceColumnsForMethod } from "@/lib/payment-ref-for-method";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { InvoicePaymentRow, RetailerInvoiceRow } from "@/types/invoice";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableDropdown, type SearchableDropdownOption } from "@/components/ui/searchable-dropdown";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Props = {
   initialPayments: InvoicePaymentRow[];
@@ -61,7 +62,7 @@ export function PaymentsScreen({
 
   const [invoiceId, setInvoiceId] = useState(preselectedInvoiceId ?? "");
   const [paymentDate, setPaymentDate] = useState(todayISODate());
-  const [method, setMethod] = useState<InvoicePaymentRow["method"]>("UPI");
+  const [method, setMethod] = useState<InvoicePaymentRow["method"] | "">("");
   const [amount, setAmount] = useState("");
   const [chequeNo, setChequeNo] = useState("");
   const [upiNo, setUpiNo] = useState("");
@@ -143,7 +144,7 @@ export function PaymentsScreen({
 
   function resetForm() {
     setPaymentDate(todayISODate());
-    setMethod("UPI");
+    setMethod("");
     setAmount("");
     setChequeNo("");
     setUpiNo("");
@@ -151,6 +152,25 @@ export function PaymentsScreen({
     setNeftUtrNo("");
     setNote("");
   }
+
+  const onMethodChange = useCallback((v: string) => {
+    if (!v) {
+      setMethod("");
+      setChequeNo("");
+      setUpiNo("");
+      setUpiRefNo("");
+      setNeftUtrNo("");
+      return;
+    }
+    const next = v as InvoicePaymentRow["method"];
+    setMethod(next);
+    if (next !== "Cheque") setChequeNo("");
+    if (next !== "UPI") {
+      setUpiNo("");
+      setUpiRefNo("");
+    }
+    if (next !== "NEFT") setNeftUtrNo("");
+  }, []);
 
   function openAdd() {
     resetForm();
@@ -168,6 +188,7 @@ export function PaymentsScreen({
       amt = 0.01;
     }
     if (amt <= 0) return toastError("Enter payment amount.");
+    if (!method) return toastError("Select payment method.");
 
     setSaving(true);
     const supabase = createClient();
@@ -185,10 +206,12 @@ export function PaymentsScreen({
       payment_date: paymentDate || todayISODate(),
       method,
       amount: amt,
-      cheque_no: chequeNo.trim() || null,
-      upi_no: upiNo.trim() || null,
-      upi_ref_no: upiRefNo.trim() || null,
-      neft_utr_no: neftUtrNo.trim() || null,
+      ...paymentReferenceColumnsForMethod(method, {
+        chequeNo: chequeNo,
+        upiNo: upiNo,
+        upiRefNo: upiRefNo,
+        neftUtrNo: neftUtrNo,
+      }),
       note: note.trim() || null,
     };
     const query = supabase.from("invoice_payments").insert(payload);
@@ -372,12 +395,13 @@ export function PaymentsScreen({
           <DatePicker value={paymentDate} onChange={setPaymentDate} disabled={saving} className={inputCls} />
           <SearchableDropdown
             value={method}
-            onChange={(v) => setMethod(v as InvoicePaymentRow["method"])}
+            onChange={onMethodChange}
             options={PAYMENT_METHOD_OPTIONS}
-            placeholder="Method"
+            placeholder="Payment method"
             disabled={saving}
-            showSearch={false}
-            allowClear={false}
+            showSearch={true}
+            searchPlaceholder="Filter methods…"
+            allowClear={true}
             triggerClassName={inputCls}
             placeholderClassName="text-muted-foreground"
             valueClassName="text-foreground"
@@ -417,11 +441,81 @@ export function PaymentsScreen({
               </div>
             ) : null}
           </div>
-          <input className={inputCls} placeholder="Cheque No" value={chequeNo} onChange={(e) => setChequeNo(e.target.value)} disabled={saving} />
-          <input className={inputCls} placeholder="UPI No" value={upiNo} onChange={(e) => setUpiNo(e.target.value)} disabled={saving} />
-          <input className={inputCls} placeholder="UPI Ref No" value={upiRefNo} onChange={(e) => setUpiRefNo(e.target.value)} disabled={saving} />
-          <input className={inputCls} placeholder="NEFT UTR No" value={neftUtrNo} onChange={(e) => setNeftUtrNo(e.target.value)} disabled={saving} />
-          <input className={inputCls} placeholder="Note" value={note} onChange={(e) => setNote(e.target.value)} disabled={saving} />
+          {method === "Cheque" ? (
+            <div>
+              <label className="text-muted-foreground mb-1.5 block text-xs font-semibold uppercase tracking-wide" htmlFor="pay-cheque">
+                Cheque no.
+              </label>
+              <input
+                id="pay-cheque"
+                className={inputCls}
+                placeholder="Cheque number"
+                value={chequeNo}
+                onChange={(e) => setChequeNo(e.target.value)}
+                disabled={saving}
+              />
+            </div>
+          ) : null}
+          {method === "UPI" ? (
+            <>
+              <div>
+                <label className="text-muted-foreground mb-1.5 block text-xs font-semibold uppercase tracking-wide" htmlFor="pay-upi">
+                  UPI no.
+                </label>
+                <input
+                  id="pay-upi"
+                  className={inputCls}
+                  placeholder="UPI ID or number"
+                  value={upiNo}
+                  onChange={(e) => setUpiNo(e.target.value)}
+                  disabled={saving}
+                />
+              </div>
+              <div>
+                <label className="text-muted-foreground mb-1.5 block text-xs font-semibold uppercase tracking-wide" htmlFor="pay-upi-ref">
+                  UPI ref no.
+                </label>
+                <input
+                  id="pay-upi-ref"
+                  className={inputCls}
+                  placeholder="Reference / UTR from app"
+                  value={upiRefNo}
+                  onChange={(e) => setUpiRefNo(e.target.value)}
+                  disabled={saving}
+                />
+              </div>
+            </>
+          ) : null}
+          {method === "NEFT" ? (
+            <div>
+              <label className="text-muted-foreground mb-1.5 block text-xs font-semibold uppercase tracking-wide" htmlFor="pay-neft">
+                NEFT UTR no.
+              </label>
+              <input
+                id="pay-neft"
+                className={inputCls}
+                placeholder="UTR number"
+                value={neftUtrNo}
+                onChange={(e) => setNeftUtrNo(e.target.value)}
+                disabled={saving}
+              />
+            </div>
+          ) : null}
+          {method !== "" ? (
+            <div>
+              <label className="text-muted-foreground mb-1.5 block text-xs font-semibold uppercase tracking-wide" htmlFor="pay-note">
+                Note
+              </label>
+              <input
+                id="pay-note"
+                className={inputCls}
+                placeholder="Optional"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                disabled={saving}
+              />
+            </div>
+          ) : null}
         </div>
         <div className="bg-panel border-border shrink-0 border-t px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <button type="button" onClick={savePayment} disabled={saving} className="bg-accent-secondary text-accent-secondary-foreground w-full rounded-lg px-4 py-3 text-sm font-semibold disabled:opacity-60">

@@ -5,6 +5,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableDropdown, type SearchableDropdownOption } from "@/components/ui/searchable-dropdown";
 import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { netInvoiceTotalAfterReturns } from "@/lib/invoice-net-after-returns";
+import { paymentReferenceColumnsForMethod } from "@/lib/payment-ref-for-method";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
 import type {
@@ -179,7 +180,7 @@ export function InvoiceEditForm({
   const [savingPayment, setSavingPayment] = useState(false);
   const [paymentEditingId, setPaymentEditingId] = useState<string | null>(null);
   const [paymentDate, setPaymentDate] = useState(todayISODate());
-  const [paymentMethod, setPaymentMethod] = useState<InvoicePaymentRow["method"]>("UPI");
+  const [paymentMethod, setPaymentMethod] = useState<InvoicePaymentRow["method"] | "">("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [payChequeNo, setPayChequeNo] = useState("");
   const [payUpiNo, setPayUpiNo] = useState("");
@@ -192,6 +193,9 @@ export function InvoiceEditForm({
   /** Avoid full-screen credit loading (and unmounting fields) when revisiting the Credit tab for the same invoice. */
   const creditListLoadedForInvoiceRef = useRef<string | null>(null);
   const paymentListLoadedForInvoiceRef = useRef<string | null>(null);
+  /** Latest invoice row for payment-tab fetch callbacks (avoid effect deps on total_amount). */
+  const invoiceForPaymentRef = useRef(invoice);
+  invoiceForPaymentRef.current = invoice;
 
   const inputStyle = { backgroundColor: INPUT_BG } as CSSProperties;
 
@@ -399,7 +403,7 @@ export function InvoiceEditForm({
   const resetPaymentToNew = useCallback(() => {
     setPaymentEditingId(null);
     setPaymentDate(todayISODate());
-    setPaymentMethod("UPI");
+    setPaymentMethod("");
     setPaymentAmount("");
     setPayChequeNo("");
     setPayUpiNo("");
@@ -428,7 +432,6 @@ export function InvoiceEditForm({
     if (activeTab !== "payment") return;
     let cancelled = false;
     const invoiceId = invoice.id;
-    const gross = round2(Number(invoice.total_amount ?? 0));
     const needsBlockingSpinner = paymentListLoadedForInvoiceRef.current !== invoiceId;
     if (needsBlockingSpinner) {
       setLoadingPayments(true);
@@ -459,6 +462,7 @@ export function InvoiceEditForm({
       const returnsSum = round2(
         (retRes.data ?? []).reduce((a, r) => a + coerceGoodsReturnAmountFromDb(r.amount), 0)
       );
+      const gross = round2(Number(invoiceForPaymentRef.current.total_amount ?? 0));
       const netBill = netInvoiceTotalAfterReturns(gross, returnsSum);
       setPaymentReturnsLoadedSum(returnsSum);
 
@@ -485,7 +489,9 @@ export function InvoiceEditForm({
     return () => {
       cancelled = true;
     };
-  }, [activeTab, invoice.id, invoice.total_amount, resetPaymentToNew, startEditPayment]);
+    // `invoice.total_amount` is read via `invoiceForPaymentRef` after the fetch so suggestions stay fresh
+    // without re-running this effect on every main-tab change (avoids refetch/HMR churn).
+  }, [activeTab, invoice.id, resetPaymentToNew, startEditPayment]);
 
   async function saveCreditNoteInline(e?: FormEvent) {
     e?.preventDefault();
@@ -575,6 +581,10 @@ export function InvoiceEditForm({
       toastError("Enter payment amount.");
       return;
     }
+    if (!paymentMethod) {
+      toastError("Select payment method.");
+      return;
+    }
 
     setSavingPayment(true);
     const supabase = createClient();
@@ -591,12 +601,14 @@ export function InvoiceEditForm({
       user_id: user.id,
       invoice_id: invoice.id,
       payment_date: paymentDate || todayISODate(),
-      method: paymentMethod,
+      method: paymentMethod as InvoicePaymentRow["method"],
       amount: round2(amt),
-      cheque_no: payChequeNo.trim() || null,
-      upi_no: payUpiNo.trim() || null,
-      upi_ref_no: payUpiRefNo.trim() || null,
-      neft_utr_no: payNeftUtrNo.trim() || null,
+      ...paymentReferenceColumnsForMethod(paymentMethod, {
+        chequeNo: payChequeNo,
+        upiNo: payUpiNo,
+        upiRefNo: payUpiRefNo,
+        neftUtrNo: payNeftUtrNo,
+      }),
       note: payNote.trim() || null,
     };
 
@@ -1456,12 +1468,30 @@ export function InvoiceEditForm({
                     <label className={labelDark}>Method</label>
                     <SearchableDropdown
                       value={paymentMethod}
-                      onChange={(v) => setPaymentMethod(v as InvoicePaymentRow["method"])}
+                      onChange={(v) => {
+                        if (!v) {
+                          setPaymentMethod("");
+                          setPayChequeNo("");
+                          setPayUpiNo("");
+                          setPayUpiRefNo("");
+                          setPayNeftUtrNo("");
+                          return;
+                        }
+                        const next = v as InvoicePaymentRow["method"];
+                        setPaymentMethod(next);
+                        if (next !== "Cheque") setPayChequeNo("");
+                        if (next !== "UPI") {
+                          setPayUpiNo("");
+                          setPayUpiRefNo("");
+                        }
+                        if (next !== "NEFT") setPayNeftUtrNo("");
+                      }}
                       options={PAYMENT_METHOD_OPTIONS}
-                      placeholder="Method"
+                      placeholder="Payment method"
                       disabled={savingPayment}
-                      showSearch={false}
-                      allowClear={false}
+                      showSearch={true}
+                      searchPlaceholder="Filter methods…"
+                      allowClear={true}
                       inputBackground={INPUT_BG}
                     />
                   </div>
@@ -1485,76 +1515,86 @@ export function InvoiceEditForm({
                       </p>
                     ) : null}
                   </div>
-                  <div>
-                    <label className={labelDark} htmlFor="inv-pay-cheque">
-                      Cheque no.
-                    </label>
-                    <input
-                      id="inv-pay-cheque"
-                      className={fieldClassDark()}
-                      style={inputStyle}
-                      value={payChequeNo}
-                      onChange={(e) => setPayChequeNo(e.target.value)}
-                      disabled={savingPayment}
-                      placeholder="Optional"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelDark} htmlFor="inv-pay-upi">
-                      UPI no.
-                    </label>
-                    <input
-                      id="inv-pay-upi"
-                      className={fieldClassDark()}
-                      style={inputStyle}
-                      value={payUpiNo}
-                      onChange={(e) => setPayUpiNo(e.target.value)}
-                      disabled={savingPayment}
-                      placeholder="Optional"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelDark} htmlFor="inv-pay-upi-ref">
-                      UPI ref no.
-                    </label>
-                    <input
-                      id="inv-pay-upi-ref"
-                      className={fieldClassDark()}
-                      style={inputStyle}
-                      value={payUpiRefNo}
-                      onChange={(e) => setPayUpiRefNo(e.target.value)}
-                      disabled={savingPayment}
-                      placeholder="Optional"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelDark} htmlFor="inv-pay-neft">
-                      NEFT UTR no.
-                    </label>
-                    <input
-                      id="inv-pay-neft"
-                      className={fieldClassDark()}
-                      style={inputStyle}
-                      value={payNeftUtrNo}
-                      onChange={(e) => setPayNeftUtrNo(e.target.value)}
-                      disabled={savingPayment}
-                      placeholder="Optional"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelDark} htmlFor="inv-pay-note">
-                      Note
-                    </label>
-                    <input
-                      id="inv-pay-note"
-                      className={fieldClassDark()}
-                      style={inputStyle}
-                      value={payNote}
-                      onChange={(e) => setPayNote(e.target.value)}
-                      disabled={savingPayment}
-                      placeholder="Optional"
-                    />
-                  </div>
+                  {paymentMethod === "Cheque" ? (
+                    <div>
+                      <label className={labelDark} htmlFor="inv-pay-cheque">
+                        Cheque no.
+                      </label>
+                      <input
+                        id="inv-pay-cheque"
+                        className={fieldClassDark()}
+                        style={inputStyle}
+                        value={payChequeNo}
+                        onChange={(e) => setPayChequeNo(e.target.value)}
+                        disabled={savingPayment}
+                        placeholder="Optional"
+                      />
+                    </div>
+                  ) : null}
+                  {paymentMethod === "UPI" ? (
+                    <>
+                      <div>
+                        <label className={labelDark} htmlFor="inv-pay-upi">
+                          UPI no.
+                        </label>
+                        <input
+                          id="inv-pay-upi"
+                          className={fieldClassDark()}
+                          style={inputStyle}
+                          value={payUpiNo}
+                          onChange={(e) => setPayUpiNo(e.target.value)}
+                          disabled={savingPayment}
+                          placeholder="Optional"
+                        />
+                      </div>
+                      <div>
+                        <label className={labelDark} htmlFor="inv-pay-upi-ref">
+                          UPI ref no.
+                        </label>
+                        <input
+                          id="inv-pay-upi-ref"
+                          className={fieldClassDark()}
+                          style={inputStyle}
+                          value={payUpiRefNo}
+                          onChange={(e) => setPayUpiRefNo(e.target.value)}
+                          disabled={savingPayment}
+                          placeholder="Optional"
+                        />
+                      </div>
+                    </>
+                  ) : null}
+                  {paymentMethod === "NEFT" ? (
+                    <div>
+                      <label className={labelDark} htmlFor="inv-pay-neft">
+                        NEFT UTR no.
+                      </label>
+                      <input
+                        id="inv-pay-neft"
+                        className={fieldClassDark()}
+                        style={inputStyle}
+                        value={payNeftUtrNo}
+                        onChange={(e) => setPayNeftUtrNo(e.target.value)}
+                        disabled={savingPayment}
+                        placeholder="Optional"
+                      />
+                    </div>
+                  ) : null}
+                  {paymentMethod !== "" ? (
+                    <div>
+                      <label className={labelDark} htmlFor="inv-pay-note">
+                        Note
+                      </label>
+                      <input
+                        id="inv-pay-note"
+                        className={fieldClassDark()}
+                        style={inputStyle}
+                        value={payNote}
+                        onChange={(e) => setPayNote(e.target.value)}
+                        disabled={savingPayment}
+                        placeholder="Optional"
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </>
             )}
