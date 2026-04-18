@@ -35,6 +35,7 @@ export async function AuthenticatedDashboardShell({
     <DashboardLayout
       username={username}
       email={user.email ?? ""}
+      userId={user.id}
       avatarUrl={avatarUrl}
       showWelcomeTour={showWelcomeTour}
     >

@@ -1,5 +1,6 @@
 "use client";
 
+import { createClient } from "@/lib/supabase/client";
 import { formatDisplayName } from "@/lib/display-name";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -8,9 +9,50 @@ import { DashboardProfileMenu } from "./dashboard-profile-menu";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { WelcomeTour } from "./welcome-tour";
 
+function renderMarkdown(text: string): React.ReactNode[] {
+  const lines = text.split("\n");
+  return lines.map((line, li) => {
+    // Parse inline bold+italic (***x***), bold (**x**), italic (*x* or _x_)
+    const parts: React.ReactNode[] = [];
+    let remaining = line;
+    let key = 0;
+    while (remaining.length) {
+      const boldItalic = remaining.match(/\*\*\*(.+?)\*\*\*/);
+      const bold      = remaining.match(/\*\*(.+?)\*\*/);
+      const italic    = remaining.match(/\*(.+?)\*|_(.+?)_/);
+      const first = [boldItalic, bold, italic]
+        .filter(Boolean)
+        .sort((a, b) => (a!.index ?? 0) - (b!.index ?? 0))[0];
+
+      if (!first || first.index === undefined) {
+        parts.push(<span key={key++}>{remaining}</span>);
+        break;
+      }
+      if (first.index > 0) parts.push(<span key={key++}>{remaining.slice(0, first.index)}</span>);
+      if (first === boldItalic) {
+        parts.push(<strong key={key++}><em>{boldItalic![1]}</em></strong>);
+        remaining = remaining.slice(first.index + boldItalic![0].length);
+      } else if (first === bold) {
+        parts.push(<strong key={key++}>{bold![1]}</strong>);
+        remaining = remaining.slice(first.index + bold![0].length);
+      } else {
+        const content = italic![1] ?? italic![2];
+        parts.push(<em key={key++}>{content}</em>);
+        remaining = remaining.slice(first.index + italic![0].length);
+      }
+    }
+    return (
+      <span key={li} className={li > 0 ? "mt-1 block" : "block"}>
+        {parts}
+      </span>
+    );
+  });
+}
+
 type Props = {
   username: string | undefined;
   email: string;
+  userId: string;
   avatarUrl?: string;
   showWelcomeTour?: boolean;
   children: React.ReactNode;
@@ -29,7 +71,7 @@ function getHeaderTitle(pathname: string): string {
   return "Dashboard";
 }
 
-type Message = { id: number; role: "user" | "bot"; text: string };
+type Message = { id: number; role: "user" | "bot"; text: string; typing?: boolean };
 
 const INITIAL_MESSAGES: Message[] = [
   { id: 0, role: "bot", text: "Hi! I'm your assistant. Ask me anything about your invoices, payments, or commissions." },
@@ -38,12 +80,14 @@ const INITIAL_MESSAGES: Message[] = [
 export function DashboardLayout({
   username,
   email,
+  userId,
   avatarUrl,
   showWelcomeTour = false,
   invoiceNavBadgeCount,
   children,
 }: Props) {
   const router = useRouter();
+  const supabase = createClient();
   const [tourVisible, setTourVisible] = useState(showWelcomeTour);
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
@@ -54,6 +98,20 @@ export function DashboardLayout({
   const pathname = usePathname();
   const title = getHeaderTitle(pathname);
   const isProfilePage = pathname.startsWith("/profile");
+  const isDashboard = pathname === "/";
+
+  function typewriterReveal(msgId: number, fullText: string) {
+    let i = 0;
+    const speed = Math.max(8, Math.min(20, Math.round(3000 / fullText.length)));
+    function tick() {
+      i++;
+      setMessages((prev) =>
+        prev.map((m) => m.id === msgId ? { ...m, text: fullText.slice(0, i), typing: i < fullText.length } : m)
+      );
+      if (i < fullText.length) setTimeout(tick, speed);
+    }
+    setTimeout(tick, speed);
+  }
 
   useEffect(() => {
     setTourVisible(showWelcomeTour);
@@ -65,6 +123,10 @@ export function DashboardLayout({
   }, [tourVisible]);
 
   useEffect(() => {
+    if (!isDashboard) setChatOpen(false);
+  }, [isDashboard]);
+
+  useEffect(() => {
     if (chatOpen) setTimeout(() => inputRef.current?.focus(), 300);
   }, [chatOpen]);
 
@@ -72,19 +134,37 @@ export function DashboardLayout({
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typing]);
 
-  function send(text: string) {
+  async function send(text: string) {
     const trimmed = text.trim();
     if (!trimmed) return;
     setMessages((prev) => [...prev, { id: Date.now(), role: "user", text: trimmed }]);
     setInput("");
     setTyping(true);
-    setTimeout(() => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        setTyping(false);
+        setMessages((prev) => [...prev, { id: Date.now() + 1, role: "bot", text: "Please login again." }]);
+        return;
+      }
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ query: trimmed }),
+      });
+      const json = await res.json();
       setTyping(false);
-      setMessages((prev) => [
-        ...prev,
-        { id: Date.now() + 1, role: "bot", text: "I received your message. Full AI integration coming soon!" },
-      ]);
-    }, 1000);
+      const botText = json.answer ?? json.error ?? "Error getting response";
+      const botId = Date.now() + 1;
+      setMessages((prev) => [...prev, { id: botId, role: "bot", text: "", typing: true }]);
+      typewriterReveal(botId, botText);
+    } catch {
+      setTyping(false);
+      const botId = Date.now() + 1;
+      setMessages((prev) => [...prev, { id: botId, role: "bot", text: "", typing: true }]);
+      typewriterReveal(botId, "Failed to connect. Try again.");
+    }
   }
 
   const displayName = useMemo(() => formatDisplayName(username, email), [username, email]);
@@ -96,6 +176,14 @@ export function DashboardLayout({
   return (
     <div className="flex min-h-[100dvh] flex-1 flex-col bg-background font-sans text-foreground transition-colors md:flex-row">
       {tourVisible && <WelcomeTour onDismissed={() => setTourVisible(false)} />}
+
+      {/* Backdrop blur overlay when chat is open */}
+      {chatOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-all duration-300"
+          onClick={() => setChatOpen(false)}
+        />
+      )}
       <DashboardSidebar
         displayName={displayName}
         avatarInitial={avatarInitial}
@@ -149,27 +237,29 @@ export function DashboardLayout({
         <DashboardMobileNav pathname={pathname} invoiceBadgeCount={invoiceNavBadgeCount} />
       </div>
 
-      {/* ── Chatbot FAB ── */}
-      <button
-        type="button"
-        aria-label="Open assistant"
-        onClick={() => setChatOpen((o) => !o)}
-        className={`fixed bottom-[5.5rem] right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f0f1a] ring-1 ring-violet-500/40 shadow-[0_0_24px_rgba(124,58,237,0.45)] transition-all duration-200 hover:scale-110 active:scale-95 md:bottom-6 md:right-6 ${
-          chatOpen ? "pointer-events-none opacity-0 scale-75" : "opacity-100 scale-100"
-        }`}
-      >
-        <img src="/bot-icon.svg" width="38" height="38" alt="" aria-hidden />
-      </button>
+      {/* ── Chatbot FAB + panel (dashboard only) ── */}
+      {isDashboard && (
+        <>
+          <button
+            type="button"
+            aria-label="Open assistant"
+            onClick={() => setChatOpen((o) => !o)}
+            className={`fixed bottom-[4.25rem] right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f0f1a] ring-1 ring-violet-500/40 shadow-[0_0_24px_rgba(124,58,237,0.45)] transition-all duration-200 hover:scale-110 active:scale-95 md:bottom-6 md:right-6 ${
+              chatOpen ? "pointer-events-none opacity-0 scale-75" : "opacity-100 scale-100"
+            }`}
+          >
+            <img src="/bot-icon.svg" width="38" height="38" alt="" aria-hidden />
+          </button>
 
-      {/* ── Chat panel ── */}
-      <div
-        className={`fixed bottom-[5.5rem] right-4 z-[49] flex w-[calc(100vw-2rem)] max-w-sm flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-[#0f0f1a] shadow-[0_8px_40px_rgba(0,0,0,0.6)] transition-all duration-300 ease-out md:bottom-24 md:right-6 ${
-          chatOpen
-            ? "pointer-events-auto translate-y-0 opacity-100"
-            : "pointer-events-none translate-y-4 opacity-0"
-        }`}
-        style={{ height: "460px" }}
-      >
+          {/* ── Chat panel ── */}
+          <div
+            className={`fixed bottom-16 right-0 z-[49] flex w-full flex-col overflow-hidden border-t border-zinc-800 bg-[#0f0f1a] shadow-[0_-4px_40px_rgba(0,0,0,0.6)] transition-all duration-300 ease-out md:bottom-24 md:right-6 md:w-[calc(100vw-2rem)] md:max-w-sm md:rounded-2xl md:border md:shadow-[0_8px_40px_rgba(0,0,0,0.6)] ${
+              chatOpen
+                ? "pointer-events-auto translate-y-0 opacity-100"
+                : "pointer-events-none translate-y-4 opacity-0"
+            }`}
+            style={{ height: "calc(100dvh - 4rem - 3.5rem)" }}
+          >
         {/* Panel header */}
         <div className="relative flex shrink-0 items-center gap-2 border-b border-zinc-800 px-3 py-2">
           <div className="absolute left-3 h-8 w-8 rounded-full bg-violet-600/20 blur-xl" />
@@ -200,12 +290,15 @@ export function DashboardLayout({
               {msg.role === "bot" && (
                 <img src="/bot-icon.svg" width="20" height="20" alt="" aria-hidden className="mb-0.5 shrink-0" />
               )}
-              <div className={`max-w-[78%] rounded-xl px-3 py-2 text-xs leading-relaxed ${
+              <div className={`max-w-[78%] rounded-2xl px-3 py-2 text-xs leading-relaxed ${
                 msg.role === "user"
-                  ? "rounded-br-sm bg-gradient-to-br from-violet-600 to-violet-700 text-white"
-                  : "rounded-bl-sm border border-zinc-700/50 bg-zinc-800/80 text-zinc-100"
+                  ? "bg-gradient-to-br from-violet-600 to-violet-700 text-white"
+                  : "border border-zinc-700/50 bg-zinc-800/80 text-zinc-100"
               }`}>
-                {msg.text}
+                {msg.role === "bot" ? renderMarkdown(msg.text) : msg.text}
+                {msg.typing && (
+                  <span className="ml-0.5 inline-block h-3 w-0.5 animate-pulse rounded-sm bg-violet-400 align-middle" />
+                )}
               </div>
               {msg.role === "user" && (
                 <div className="mb-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-700 text-[9px] font-bold text-white">
@@ -217,10 +310,10 @@ export function DashboardLayout({
           {typing && (
             <div className="flex items-end gap-1.5">
               <img src="/bot-icon.svg" width="20" height="20" alt="" aria-hidden className="mb-0.5 shrink-0" />
-              <div className="flex items-center gap-1 rounded-xl rounded-bl-sm border border-zinc-700/50 bg-zinc-800/90 px-3 py-2">
-                <span className="h-1 w-1 animate-bounce rounded-full bg-violet-400 [animation-delay:0ms]" />
-                <span className="h-1 w-1 animate-bounce rounded-full bg-violet-400 [animation-delay:150ms]" />
-                <span className="h-1 w-1 animate-bounce rounded-full bg-violet-400 [animation-delay:300ms]" />
+              <div className="flex items-center gap-1 px-1 py-2">
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-400 [animation-delay:0ms]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-400 [animation-delay:150ms]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-400 [animation-delay:300ms]" />
               </div>
             </div>
           )}
@@ -252,7 +345,9 @@ export function DashboardLayout({
             </button>
           </div>
         </div>
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
