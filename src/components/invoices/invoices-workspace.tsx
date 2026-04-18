@@ -12,6 +12,7 @@ import { useWorkspaceUiSession } from "@/hooks/use-workspace-ui-session";
 import { netInvoiceTotalAfterReturns } from "@/lib/invoice-net-after-returns";
 import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type TransitionEvent } from "react";
+import { SearchBar } from "@/components/ui/search-bar";
 
 type Props = {
   initialInvoices: RetailerInvoiceRow[];
@@ -238,6 +239,7 @@ export function InvoicesWorkspace({
 }: Props) {
   const router = useRouter();
   const [invoices, setInvoices] = useState<RetailerInvoiceRow[]>(initialInvoices);
+  const [searchQuery, setSearchQuery] = useState("");
   const [companies] = useState<CompanyRow[]>(initialCompanies);
   const [retailers] = useState<RetailerRow[]>(initialRetailers);
   const [returnAmountByInvoiceId, setReturnAmountByInvoiceId] =
@@ -652,6 +654,17 @@ export function InvoicesWorkspace({
     () => [...invoices].sort((a, b) => b.bill_date.localeCompare(a.bill_date)),
     [invoices]
   );
+
+  const filteredInvoices = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return sortedInvoices;
+    return sortedInvoices.filter(inv =>
+      inv.invoice_number?.toLowerCase().includes(q) ||
+      inv.retailer_name?.toLowerCase().includes(q) ||
+      companyMap.get(inv.company_id)?.toLowerCase().includes(q) ||
+      inv.bill_date?.includes(q)
+    );
+  }, [sortedInvoices, searchQuery, companyMap]);
   const invoiceTotals = useMemo(() => {
     let totalBillAmount = 0;
     let totalTransportAmount = 0;
@@ -1048,8 +1061,13 @@ export function InvoicesWorkspace({
           </button>
         </div>
       ) : (
+        <>
+          <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="Search by invoice no, retailer, company…" />
+          {filteredInvoices.length === 0 ? (
+            <p className="py-10 text-center text-sm text-zinc-500">No invoices match &ldquo;{searchQuery}&rdquo;</p>
+          ) : (
         <ul className="flex flex-col gap-3">
-          {sortedInvoices.map((inv) => {
+          {filteredInvoices.map((inv) => {
             const co = companyMap.get(inv.company_id) ?? "—";
             const q = Math.max(1, Math.floor(Number(inv.quantity ?? 1)));
             const gross = Number(inv.total_amount ?? 0);
@@ -1096,6 +1114,8 @@ export function InvoicesWorkspace({
             );
           })}
         </ul>
+          )}
+        </>
       )}
 
       {companies.length > 0 && retailers.length > 0 ? (

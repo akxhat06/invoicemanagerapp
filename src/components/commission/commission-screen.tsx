@@ -6,12 +6,15 @@ import { SearchableDropdown, type SearchableDropdownOption } from "@/components/
 import type { RetailerRow } from "@/types/retailer";
 import type { RetailerInvoiceRow } from "@/types/invoice";
 import type { CommissionRow } from "@/types/commission";
+import type { CompanyRow } from "@/types/company";
 import { useEffect, useMemo, useState } from "react";
+import { SearchBar } from "@/components/ui/search-bar";
 
 type Props = {
   initialRetailers: RetailerRow[];
   initialInvoices: RetailerInvoiceRow[];
   initialCommissions: CommissionRow[];
+  initialCompanies?: CompanyRow[];
 };
 
 function formatInr(n: number) {
@@ -45,8 +48,9 @@ const inputCls =
 const labelCls =
   "text-muted-foreground mb-1.5 block text-xs font-semibold uppercase tracking-wide";
 
-export function CommissionScreen({ initialRetailers, initialInvoices, initialCommissions }: Props) {
+export function CommissionScreen({ initialRetailers, initialInvoices, initialCommissions, initialCompanies = [] }: Props) {
   const [commissions, setCommissions] = useState<CommissionRow[]>(initialCommissions);
+  const [searchQuery, setSearchQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -95,6 +99,30 @@ export function CommissionScreen({ initialRetailers, initialInvoices, initialCom
       })),
     [filteredInvoices]
   );
+
+  // Company lookup: invoice_id → company_id → company name
+  const invoiceCompanyMap = useMemo(() =>
+    new Map(initialInvoices.map(inv => [inv.id, inv.company_id])),
+    [initialInvoices]
+  );
+  const companyNameMap = useMemo(() =>
+    new Map(initialCompanies.map(co => [co.id, co.name ?? ""])),
+    [initialCompanies]
+  );
+  const getCompanyName = (invoiceId: string) => {
+    const companyId = invoiceCompanyMap.get(invoiceId);
+    return companyId ? (companyNameMap.get(companyId) ?? "") : "";
+  };
+
+  const filteredCommissions = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return commissions;
+    return commissions.filter(c =>
+      c.retailer_name?.toLowerCase().includes(q) ||
+      c.invoice_number?.toLowerCase().includes(q) ||
+      getCompanyName(c.invoice_id)?.toLowerCase().includes(q)
+    );
+  }, [commissions, searchQuery, invoiceCompanyMap, companyNameMap]);
 
   // When invoice is selected, auto-fill basic & gst amounts
   function handleInvoiceChange(id: string) {
@@ -225,8 +253,13 @@ export function CommissionScreen({ initialRetailers, initialInvoices, initialCom
             </button>
           </div>
         ) : (
+          <>
+            <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="Search by retailer, invoice…" />
+            {filteredCommissions.length === 0 ? (
+              <p className="py-10 text-center text-sm text-zinc-500">No commissions match &ldquo;{searchQuery}&rdquo;</p>
+            ) : (
           <ul className="flex flex-col gap-3">
-            {commissions.map((c) => (
+            {filteredCommissions.map((c) => (
               <li key={c.id}>
                 <div className="flex w-full items-stretch overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-950/95 to-zinc-900/50 shadow-[0_4px_24px_rgba(0,0,0,0.35)] ring-1 ring-white/[0.03]">
                   {/* Colour accent bar */}
@@ -241,9 +274,17 @@ export function CommissionScreen({ initialRetailers, initialInvoices, initialCom
                         <p className="truncate text-sm font-semibold text-white">
                           {c.retailer_name || "Unknown retailer"}
                         </p>
-                        <p className="mt-0.5 text-xs text-zinc-400">
-                          Invoice: {c.invoice_number}
-                        </p>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <p className="text-xs text-zinc-400">Invoice: {c.invoice_number}</p>
+                          {getCompanyName(c.invoice_id) && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-300 ring-1 ring-violet-500/20">
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                <path d="M6 22V4a2 2 0 012-2h8a2 2 0 012 2v18M2 22h20"/>
+                              </svg>
+                              {getCompanyName(c.invoice_id)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="shrink-0 rounded-lg bg-violet-500/15 px-2.5 py-1 ring-1 ring-violet-500/25">
                         <p className="text-sm font-bold text-violet-200">
@@ -263,6 +304,8 @@ export function CommissionScreen({ initialRetailers, initialInvoices, initialCom
               </li>
             ))}
           </ul>
+            )}
+          </>
         )}
       </section>
 
@@ -410,7 +453,7 @@ export function CommissionScreen({ initialRetailers, initialInvoices, initialCom
         type="button"
         onClick={openAdd}
         aria-label="Add commission"
-        className={`bg-accent text-accent-foreground fixed bottom-24 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full text-3xl shadow-[0_0_24px_rgba(167,139,250,0.35)] transition hover:scale-105 active:scale-95 md:bottom-10 md:right-10 ${
+        className={`bg-accent text-accent-foreground fixed bottom-24 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full text-3xl shadow-[0_0_24px_rgba(167,139,250,0.35)] transition hover:scale-105 active:scale-95 md:bottom-10 md:right-10 ${
           addOpen ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
       >

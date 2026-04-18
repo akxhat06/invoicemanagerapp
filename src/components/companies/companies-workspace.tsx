@@ -11,6 +11,7 @@ import { useWorkspaceUiSession } from "@/hooks/use-workspace-ui-session";
 import { sumGoodsReturnAmountsByInvoiceId, netInvoiceTotalAfterReturns } from "@/lib/invoice-net-after-returns";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { SearchBar } from "@/components/ui/search-bar";
 
 type Props = {
   initialCompanies: CompanyRow[];
@@ -18,6 +19,8 @@ type Props = {
   initialInvoiceCountByCompany?: Record<string, number>;
   /** Sum of invoice total_amount per company id (from server aggregate). */
   initialTotalAmountByCompany?: Record<string, number>;
+  /** Sum of commission_amount per company id (from server aggregate). */
+  initialCommissionAmountByCompany?: Record<string, number>;
 };
 
 type PanelMode = "closed" | "add" | "view" | "edit";
@@ -286,10 +289,12 @@ export function CompaniesWorkspace({
   initialCompanies,
   initialInvoiceCountByCompany = {},
   initialTotalAmountByCompany = {},
+  initialCommissionAmountByCompany = {},
 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const [companies, setCompanies] = useState<CompanyRow[]>(initialCompanies);
+  const [searchQuery, setSearchQuery] = useState("");
   const [panel, setPanel] = useState<PanelMode>("closed");
   const prevPanelRef = useRef<PanelMode>("closed");
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -311,6 +316,7 @@ export function CompaniesWorkspace({
   const [inlineInvoiceEdit, setInlineInvoiceEdit] = useState<RetailerInvoiceRow | null>(null);
   const [invoiceCountByCompany, setInvoiceCountByCompany] = useState<Record<string, number>>(initialInvoiceCountByCompany);
   const [totalAmountByCompany, setTotalAmountByCompany] = useState<Record<string, number>>(initialTotalAmountByCompany);
+  const [commissionAmountByCompany] = useState<Record<string, number>>(initialCommissionAmountByCompany);
   const [companyViewTab, setCompanyViewTab] = useState<CompanyViewTab>("profile");
   const pendingInlineInvoiceIdRef = useRef<string | null>(null);
 
@@ -345,6 +351,17 @@ export function CompaniesWorkspace({
     () => companies.reduce((sum, c) => sum + (invoiceCountByCompany[c.id] ?? 0), 0),
     [companies, invoiceCountByCompany]
   );
+
+  const filteredCompanies = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return companies;
+    return companies.filter(c =>
+      c.name?.toLowerCase().includes(q) ||
+      c.gst_no?.toLowerCase().includes(q) ||
+      c.city?.toLowerCase().includes(q) ||
+      c.state?.toLowerCase().includes(q)
+    );
+  }, [companies, searchQuery]);
 
   useEffect(() => {
     if (panel !== "view" || !selected) {
@@ -971,12 +988,18 @@ export function CompaniesWorkspace({
           </button>
         </div>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {companies.map((c) => {
+        <>
+          <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="Search companies…" />
+          {filteredCompanies.length === 0 ? (
+            <p className="py-10 text-center text-sm text-zinc-500">No companies match &ldquo;{searchQuery}&rdquo;</p>
+          ) : (
+          <ul className="flex flex-col gap-3">
+          {filteredCompanies.map((c) => {
             const phoneDigits = phoneDigitsFromStored(c.phone_no);
             const phoneLabel = phoneDigits ? `+91 ${phoneDigits}` : "—";
             const invCount = invoiceCountByCompany[c.id] ?? 0;
             const totalAmount = totalAmountByCompany[c.id] ?? 0;
+            const commissionAmount = commissionAmountByCompany[c.id] ?? 0;
             const gstShort = c.gst_no?.trim() ? `${c.gst_no.slice(0, 2)}···${c.gst_no.slice(-4)}` : null;
 
             return (
@@ -1022,18 +1045,24 @@ export function CompaniesWorkspace({
                         className="flex items-center gap-1.5 rounded-full border border-emerald-800/60 bg-emerald-950/60 px-2.5 py-1 text-xs font-medium text-emerald-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
                         title={`Total amount ${formatInr(totalAmount)}`}
                       >
-                        <svg
-                          className="h-3.5 w-3.5 text-emerald-300"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          aria-hidden
-                        >
+                        <svg className="h-3.5 w-3.5 text-emerald-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                           <path d="M6 5h10M6 9h10M8 13h6l-6 6h10" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                         <span className="tabular-nums">{formatInr(totalAmount)}</span>
                       </div>
+                      {commissionAmount > 0 && (
+                        <div
+                          className="flex items-center gap-1.5 rounded-full border border-pink-800/60 bg-pink-950/60 px-2.5 py-1 text-xs font-medium text-pink-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                          title={`Commission ${formatInr(commissionAmount)}`}
+                        >
+                          <svg className="h-3.5 w-3.5 text-pink-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+                            <circle cx="9" cy="9" r="2" />
+                            <circle cx="15" cy="15" r="2" />
+                            <path d="M7 17L17 7" strokeLinecap="round" />
+                          </svg>
+                          <span className="tabular-nums">{formatInr(commissionAmount)}</span>
+                        </div>
+                      )}
                       <span className="text-zinc-600 transition group-hover:text-zinc-400" aria-hidden>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
@@ -1046,6 +1075,8 @@ export function CompaniesWorkspace({
             );
           })}
         </ul>
+          )}
+        </>
       )}
 
       {/* FAB — opens add flow with sheet animation */}

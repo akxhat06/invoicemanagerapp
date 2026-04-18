@@ -17,6 +17,7 @@ import {
   type CSSProperties,
   type TransitionEvent,
 } from "react";
+import { SearchBar } from "@/components/ui/search-bar";
 
 type Props = {
   initialReturns: InvoiceGoodsReturnRow[];
@@ -86,6 +87,7 @@ function CreditNoteDocGlyph({ className }: { className?: string }) {
 export function CreditNotesWorkspace({ initialReturns, initialInvoices }: Props) {
   const router = useRouter();
   const [returns, setReturns] = useState(initialReturns);
+  const [searchQuery, setSearchQuery] = useState("");
   const [invoices] = useState(initialInvoices);
 
   const [panel, setPanel] = useState<PanelMode>("closed");
@@ -324,6 +326,20 @@ export function CreditNotesWorkspace({ initialReturns, initialInvoices }: Props)
     [returns]
   );
 
+  const filteredReturns = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return sortedReturns;
+    return sortedReturns.filter(r => {
+      const inv = invoiceById.get(r.invoice_id);
+      return (
+        inv?.invoice_number?.toLowerCase().includes(q) ||
+        inv?.retailer_name?.toLowerCase().includes(q) ||
+        r.return_date?.includes(q) ||
+        r.note?.toLowerCase().includes(q)
+      );
+    });
+  }, [sortedReturns, searchQuery, invoiceById]);
+
   const totals = useMemo(() => {
     let sum = 0;
     for (const r of returns) {
@@ -381,8 +397,13 @@ export function CreditNotesWorkspace({ initialReturns, initialInvoices }: Props)
           </button>
         </div>
       ) : (
+        <>
+          <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="Search by invoice, retailer, date…" />
+          {filteredReturns.length === 0 ? (
+            <p className="py-10 text-center text-sm text-zinc-500">No credit notes match &ldquo;{searchQuery}&rdquo;</p>
+          ) : (
         <ul className="flex flex-col gap-3">
-          {sortedReturns.map((r) => {
+          {filteredReturns.map((r) => {
             const inv = invoiceById.get(r.invoice_id);
             const invNo = inv?.invoice_number ?? "—";
             const qr = Math.max(1, Math.floor(Number(r.quantity_returned ?? 1)));
@@ -417,6 +438,8 @@ export function CreditNotesWorkspace({ initialReturns, initialInvoices }: Props)
             );
           })}
         </ul>
+          )}
+        </>
       )}
 
       {invoices.length > 0 ? (

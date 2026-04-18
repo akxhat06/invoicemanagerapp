@@ -12,6 +12,7 @@ import { useWorkspaceUiSession } from "@/hooks/use-workspace-ui-session";
 import { sumGoodsReturnAmountsByInvoiceId, netInvoiceTotalAfterReturns } from "@/lib/invoice-net-after-returns";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type TransitionEvent } from "react";
+import { SearchBar } from "@/components/ui/search-bar";
 
 type Props = {
   initialRetailers: RetailerRow[];
@@ -183,6 +184,7 @@ export function RetailersScreen({
   const router = useRouter();
   const pathname = usePathname();
   const [retailers, setRetailers] = useState<RetailerRow[]>(initialRetailers);
+  const [searchQuery, setSearchQuery] = useState("");
   const [companies, setCompanies] = useState<CompanyRow[]>(initialCompanies);
   const [invoiceCountByRetailer, setInvoiceCountByRetailer] = useState(initialInvoiceCountByRetailer);
   const [companyNamesByRetailer, setCompanyNamesByRetailer] = useState(initialCompanyNamesByRetailer);
@@ -711,6 +713,17 @@ export function RetailersScreen({
     [retailers, invoiceCountByRetailer]
   );
 
+  const filteredRetailers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return retailers;
+    return retailers.filter(r =>
+      r.name?.toLowerCase().includes(q) ||
+      r.gst_no?.toLowerCase().includes(q) ||
+      r.city?.toLowerCase().includes(q) ||
+      (companyNamesByRetailer[r.id] ?? []).some(n => n.toLowerCase().includes(q))
+    );
+  }, [retailers, searchQuery, companyNamesByRetailer]);
+
   const linkedCompanyNames = useMemo(() => {
     if (!selected) return [];
     if (retailerInvoices.length > 0) {
@@ -941,8 +954,13 @@ export function RetailersScreen({
           </button>
         </div>
       ) : (
+        <>
+          <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="Search retailers…" />
+          {filteredRetailers.length === 0 ? (
+            <p className="py-10 text-center text-sm text-zinc-500">No retailers match &ldquo;{searchQuery}&rdquo;</p>
+          ) : (
         <ul className="flex flex-col gap-3">
-          {retailers.map((r) => {
+          {filteredRetailers.map((r) => {
             const phoneDigits = phoneDigitsFromStored(r.contact_no);
             const phoneLabel = phoneDigits ? `+91 ${phoneDigits}` : "—";
             const invCount = invoiceCountByRetailer[r.id] ?? 0;
@@ -993,6 +1011,8 @@ export function RetailersScreen({
             );
           })}
         </ul>
+          )}
+        </>
       )}
 
       <button

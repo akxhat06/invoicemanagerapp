@@ -89,6 +89,7 @@ export function DashboardLayout({
   const router = useRouter();
   const supabase = createClient();
   const [tourVisible, setTourVisible] = useState(showWelcomeTour);
+  const [navOpen, setNavOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState("");
@@ -148,10 +149,17 @@ export function DashboardLayout({
         setMessages((prev) => [...prev, { id: Date.now() + 1, role: "bot", text: "Please login again." }]);
         return;
       }
+
+      // Build conversation history from current state (skip welcome msg id=0, skip still-typing)
+      const history = messages
+        .filter((m) => m.id !== 0 && !m.typing)
+        .slice(-10) // last 5 turns (10 messages)
+        .map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
+
       const res = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ query: trimmed }),
+        body: JSON.stringify({ query: trimmed, history }),
       });
       const json = await res.json();
       setTyping(false);
@@ -234,7 +242,7 @@ export function DashboardLayout({
           <div className="mx-auto w-full max-w-6xl">{children}</div>
         </main>
 
-        <DashboardMobileNav pathname={pathname} invoiceBadgeCount={invoiceNavBadgeCount} />
+        <DashboardMobileNav pathname={pathname} invoiceBadgeCount={invoiceNavBadgeCount} onOpenChange={setNavOpen} hidden={chatOpen} />
       </div>
 
       {/* ── Chatbot FAB + panel (dashboard only) ── */}
@@ -244,26 +252,26 @@ export function DashboardLayout({
             type="button"
             aria-label="Open assistant"
             onClick={() => setChatOpen((o) => !o)}
-            className={`fixed bottom-[4.25rem] right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f0f1a] ring-1 ring-violet-500/40 shadow-[0_0_24px_rgba(124,58,237,0.45)] transition-all duration-200 hover:scale-110 active:scale-95 md:bottom-6 md:right-6 ${
-              chatOpen ? "pointer-events-none opacity-0 scale-75" : "opacity-100 scale-100"
+            className={`fixed bottom-[max(4.5rem,calc(env(safe-area-inset-bottom)+3.5rem))] right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full transition-all duration-200 hover:scale-110 active:scale-95 md:bottom-6 md:right-6 ${
+              chatOpen || navOpen ? "pointer-events-none opacity-0 scale-75" : "opacity-100 scale-100"
             }`}
           >
-            <img src="/bot-icon.svg" width="38" height="38" alt="" aria-hidden />
+            <img src="/bot-icon.svg" width="56" height="56" alt="" aria-hidden className="rounded-full" />
           </button>
 
           {/* ── Chat panel ── */}
           <div
-            className={`fixed bottom-16 right-0 z-[49] flex w-full flex-col overflow-hidden border-t border-zinc-800 bg-[#0f0f1a] shadow-[0_-4px_40px_rgba(0,0,0,0.6)] transition-all duration-300 ease-out md:bottom-24 md:right-6 md:w-[calc(100vw-2rem)] md:max-w-sm md:rounded-2xl md:border md:shadow-[0_8px_40px_rgba(0,0,0,0.6)] ${
+            className={`fixed bottom-0 right-0 z-[49] flex w-full flex-col overflow-hidden border-t border-zinc-800 bg-[#0f0f1a] shadow-[0_-4px_40px_rgba(0,0,0,0.6)] transition-all duration-300 ease-out md:bottom-24 md:right-6 md:w-[calc(100vw-2rem)] md:max-w-sm md:rounded-2xl md:border md:shadow-[0_8px_40px_rgba(0,0,0,0.6)] ${
               chatOpen
                 ? "pointer-events-auto translate-y-0 opacity-100"
                 : "pointer-events-none translate-y-4 opacity-0"
             }`}
-            style={{ height: "calc(100dvh - 4rem - 3.5rem)" }}
+            style={{ height: "calc(100dvh - 3.5rem)" }}
           >
         {/* Panel header */}
         <div className="relative flex shrink-0 items-center gap-2 border-b border-zinc-800 px-3 py-2">
           <div className="absolute left-3 h-8 w-8 rounded-full bg-violet-600/20 blur-xl" />
-          <img src="/bot-icon.svg" width="28" height="28" alt="" aria-hidden className="relative shrink-0 drop-shadow-[0_0_6px_rgba(124,58,237,0.8)]" />
+          <img src="/bot-icon.svg" width="28" height="28" alt="" aria-hidden className="relative shrink-0 rounded-full" />
           <div className="relative flex-1">
             <p className="text-xs font-bold text-white">Assistant</p>
             <div className="flex items-center gap-1">
@@ -288,7 +296,7 @@ export function DashboardLayout({
           {messages.map((msg) => (
             <div key={msg.id} className={`flex items-end gap-1.5 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
               {msg.role === "bot" && (
-                <img src="/bot-icon.svg" width="20" height="20" alt="" aria-hidden className="mb-0.5 shrink-0" />
+                <img src="/bot-icon.svg" width="20" height="20" alt="" aria-hidden className="mb-0.5 shrink-0 rounded-full" />
               )}
               <div className={`max-w-[78%] rounded-2xl px-3 py-2 text-xs leading-relaxed ${
                 msg.role === "user"
