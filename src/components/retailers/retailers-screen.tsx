@@ -1,18 +1,15 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { InvoiceEditForm } from "@/components/invoices/invoice-edit-form";
+import { BuildingIcon, InvoiceDocIcon } from "@/components/retailers/retailer-detail-ui";
+import { PAN_PREFIX, parseRetailerTaxId, phoneDigitsFromStored } from "@/lib/retailer-helpers";
 import { skipRequiredFieldValidation } from "@/lib/dev-validation";
 import { toastError, toastSuccess } from "@/lib/toast";
 import type { CompanyRow } from "@/types/company";
-import type { RetailerInvoiceRow } from "@/types/invoice";
 import type { RetailerRow } from "@/types/retailer";
-import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { useWorkspaceUiSession } from "@/hooks/use-workspace-ui-session";
-import { sumGoodsReturnAmountsByInvoiceId, netInvoiceTotalAfterReturns } from "@/lib/invoice-net-after-returns";
-import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type TransitionEvent } from "react";
-import { SearchBar } from "@/components/ui/search-bar";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type TransitionEvent } from "react";
 
 type Props = {
   initialRetailers: RetailerRow[];
@@ -20,18 +17,16 @@ type Props = {
   initialInvoiceCountByRetailer: Record<string, number>;
   initialCompanyNamesByRetailer: Record<string, string[]>;
   initialTotalAmountByRetailer: Record<string, number>;
+  /** When set (e.g. `/retailers?edit=id`), opens edit sheet once for that retailer. */
+  editRetailerId?: string | null;
 };
 
-type PanelMode = "closed" | "add" | "view" | "edit";
-
-type RetailerViewTab = "profile" | "invoices";
+type PanelMode = "closed" | "add" | "edit";
 
 type RetailersUiSessionV1 = {
   v: 1;
   panel: PanelMode;
   selectedId: string | null;
-  retailerViewTab: RetailerViewTab;
-  inlineInvoiceEditId: string | null;
   draft: {
     retailerName: string;
     retailerAddress: string;
@@ -46,33 +41,15 @@ type RetailersUiSessionV1 = {
 
 const CANVAS = "#101014";
 const INPUT_BG = "#1E1E24";
-const PAN_PREFIX = "PAN:";
 
 function trimNull(s: string): string | null {
   const v = s.trim();
   return v === "" ? null : v;
 }
 
-function phoneDigitsFromStored(phone: string | null | undefined): string {
-  if (!phone?.trim()) return "";
-  const d = phone.replace(/\D/g, "");
-  if (d.length >= 12 && d.startsWith("91")) return d.slice(2, 12);
-  if (d.length === 10) return d;
-  return d.slice(-10);
-}
-
 function toE164Contact(digits: string): string | null {
   const d = digits.replace(/\D/g, "").slice(0, 10);
   return d.length === 10 ? `+91${d}` : null;
-}
-
-function parseRetailerTaxId(raw: string | null | undefined): { type: "gst" | "pan"; value: string } {
-  const v = (raw ?? "").trim().toUpperCase();
-  if (!v) return { type: "gst", value: "" };
-  if (v.startsWith(PAN_PREFIX)) {
-    return { type: "pan", value: v.slice(PAN_PREFIX.length) };
-  }
-  return { type: "gst", value: v };
 }
 
 function toStoredRetailerTaxId(type: "gst" | "pan", value: string): string {
@@ -90,87 +67,9 @@ function fieldClassDark(multiline = false) {
 
 const labelDark = "mb-1.5 block text-sm font-medium text-zinc-100";
 
-const TAX_ID_TYPE_OPTIONS = [
-  { value: "gst", label: "GST" },
-  { value: "pan", label: "PAN" },
-] as const;
-
 function formatInr(n: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(
     Number.isFinite(n) ? n : 0
-  );
-}
-
-function ViewRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  const v = value?.trim();
-  return (
-    <div className="border-b border-zinc-800/40 py-3.5 last:border-b-0">
-      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">{label}</p>
-      <p className={`mt-1.5 whitespace-pre-wrap text-[15px] leading-snug text-zinc-50 ${mono ? "font-mono text-sm tracking-tight text-zinc-100" : ""}`}>
-        {v || "—"}
-      </p>
-    </div>
-  );
-}
-
-function ViewSectionCard({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return (
-    <div
-      className={`overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-inset ring-white/[0.04] ${className}`}
-    >
-      {children}
-    </div>
-  );
-}
-
-function ViewSubsectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <div className="border-b border-zinc-800/60 bg-zinc-900 px-4 py-2.5">
-      <p className="border-l-2 border-teal-500/50 pl-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">{children}</p>
-    </div>
-  );
-}
-
-function InvoiceDocIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function BuildingIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-3" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M9 9h.01M9 13h.01M9 17h.01M15 14h.01M15 18h.01" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function PersonIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function StatIconWrap({ tone, children }: { tone: "neutral" | "cyan" | "teal"; children: ReactNode }) {
-  const cls =
-    tone === "neutral"
-      ? "bg-white/[0.06] text-zinc-300 ring-white/[0.08]"
-      : tone === "cyan"
-        ? "bg-cyan-500/14 text-cyan-200 ring-cyan-400/15"
-        : "bg-teal-500/14 text-teal-200 ring-teal-400/18";
-  return (
-    <div
-      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ring-1 ${cls}`}
-      aria-hidden
-    >
-      {children}
-    </div>
   );
 }
 
@@ -180,11 +79,10 @@ export function RetailersScreen({
   initialInvoiceCountByRetailer,
   initialCompanyNamesByRetailer,
   initialTotalAmountByRetailer,
+  editRetailerId = null,
 }: Props) {
   const router = useRouter();
-  const pathname = usePathname();
   const [retailers, setRetailers] = useState<RetailerRow[]>(initialRetailers);
-  const [searchQuery, setSearchQuery] = useState("");
   const [companies, setCompanies] = useState<CompanyRow[]>(initialCompanies);
   const [invoiceCountByRetailer, setInvoiceCountByRetailer] = useState(initialInvoiceCountByRetailer);
   const [companyNamesByRetailer, setCompanyNamesByRetailer] = useState(initialCompanyNamesByRetailer);
@@ -198,15 +96,7 @@ export function RetailersScreen({
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<RetailerRow | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [retailerViewTab, setRetailerViewTab] = useState<RetailerViewTab>("profile");
-  const pendingInlineInvoiceIdRef = useRef<string | null>(null);
-  const [retailerInvoices, setRetailerInvoices] = useState<RetailerInvoiceRow[]>([]);
-  const [retailerInvoicesLoading, setRetailerInvoicesLoading] = useState(false);
-  const [invoiceReturnAmountById, setInvoiceReturnAmountById] = useState<Record<string, number>>({});
-  const [invoiceReturnsRefreshKey, setInvoiceReturnsRefreshKey] = useState(0);
-  const [inlineInvoiceEdit, setInlineInvoiceEdit] = useState<RetailerInvoiceRow | null>(null);
-  const [invoiceDeleteTarget, setInvoiceDeleteTarget] = useState<RetailerInvoiceRow | null>(null);
-  const [invoiceDeleting, setInvoiceDeleting] = useState(false);
+  const editFromQueryRef = useRef(false);
 
   const [retailerName, setRetailerName] = useState("");
   const [retailerAddress, setRetailerAddress] = useState("");
@@ -240,63 +130,8 @@ export function RetailersScreen({
   }, [initialTotalAmountByRetailer]);
 
   useEffect(() => {
-    if (panel !== "view" || !selected) {
-      setRetailerInvoices([]);
-      setInvoiceReturnAmountById({});
-      setRetailerInvoicesLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setRetailerInvoicesLoading(true);
-    (async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("retailer_invoices")
-        .select("*")
-        .eq("retailer_id", selected.id)
-        .order("bill_date", { ascending: false });
-      if (cancelled) return;
-      if (error) {
-        setRetailerInvoicesLoading(false);
-        toastError(error.message);
-        setRetailerInvoices([]);
-        setInvoiceReturnAmountById({});
-        return;
-      }
-      const rows = (data ?? []) as RetailerInvoiceRow[];
-      setRetailerInvoices(rows);
-      const ids = rows.map((r) => r.id);
-      let sums: Record<string, number> = {};
-      if (ids.length > 0) {
-        const { data: retData, error: retErr } = await supabase
-          .from("invoice_goods_returns")
-          .select("invoice_id, amount")
-          .in("invoice_id", ids);
-        if (!cancelled && !retErr && retData) {
-          sums = sumGoodsReturnAmountsByInvoiceId(retData as { invoice_id: string; amount?: number | string | null }[]);
-        }
-      }
-      if (cancelled) return;
-      setInvoiceReturnAmountById(sums);
-      setRetailerInvoicesLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [panel, selected?.id, pathname, invoiceReturnsRefreshKey]);
-
-  useEffect(() => {
-    const pid = pendingInlineInvoiceIdRef.current;
-    if (!pid || panel !== "view" || !selected) return;
-    if (retailerInvoicesLoading) return;
-    const inv = retailerInvoices.find((i) => i.id === pid);
-    if (inv) {
-      setInlineInvoiceEdit(inv);
-      pendingInlineInvoiceIdRef.current = null;
-      return;
-    }
-    pendingInlineInvoiceIdRef.current = null;
-  }, [retailerInvoices, retailerInvoicesLoading, panel, selected?.id]);
+    editFromQueryRef.current = false;
+  }, [editRetailerId]);
 
   const resetForm = useCallback(() => {
     setRetailerName("");
@@ -321,25 +156,31 @@ export function RetailersScreen({
     setRetailerGst(parsedTax.value);
   }, []);
 
+  useEffect(() => {
+    if (!editRetailerId || editFromQueryRef.current) return;
+    const r = retailers.find((x) => x.id === editRetailerId);
+    if (!r) return;
+    editFromQueryRef.current = true;
+    hydrateFromRetailer(r);
+    setSelected(r);
+    setPanel("edit");
+    router.replace("/retailers", { scroll: false });
+  }, [editRetailerId, retailers, hydrateFromRetailer, router]);
+
   const applyRetailersUiSession = useCallback(
     (s: RetailersUiSessionV1) => {
-      pendingInlineInvoiceIdRef.current = null;
-      if (s.panel === "closed") {
+      if (s.panel === "closed" || (s.panel as string) === "view") {
         setPanel("closed");
         setSelected(null);
-        setInlineInvoiceEdit(null);
-        setRetailerViewTab("profile");
         resetForm();
         return;
       }
       setPanel(s.panel);
-      setRetailerViewTab(s.retailerViewTab ?? "profile");
       if (s.selectedId) {
         const r = retailers.find((x) => x.id === s.selectedId);
         if (!r) {
           setPanel("closed");
           setSelected(null);
-          setInlineInvoiceEdit(null);
           resetForm();
           return;
         }
@@ -371,9 +212,6 @@ export function RetailersScreen({
           resetForm();
         }
       }
-      if (s.inlineInvoiceEditId) {
-        pendingInlineInvoiceIdRef.current = s.inlineInvoiceEditId;
-      }
     },
     [retailers, hydrateFromRetailer, resetForm]
   );
@@ -386,8 +224,6 @@ export function RetailersScreen({
       v: 1,
       panel,
       selectedId: selected?.id ?? null,
-      retailerViewTab,
-      inlineInvoiceEditId: inlineInvoiceEdit?.id ?? null,
       draft:
         panel === "add" || panel === "edit"
           ? {
@@ -406,8 +242,6 @@ export function RetailersScreen({
     saveDeps: [
       panel,
       selected?.id,
-      retailerViewTab,
-      inlineInvoiceEdit?.id,
       retailerName,
       retailerAddress,
       retailerContactPerson,
@@ -422,8 +256,6 @@ export function RetailersScreen({
   const finalizeClose = useCallback(() => {
     setPanel("closed");
     setSelected(null);
-    setInlineInvoiceEdit(null);
-    setRetailerViewTab("profile");
     resetForm();
     isAnimatingClose.current = false;
   }, [resetForm]);
@@ -475,22 +307,13 @@ export function RetailersScreen({
   };
 
   const openView = (r: RetailerRow) => {
-    setSelected(r);
-    hydrateFromRetailer(r);
-    setRetailerViewTab("profile");
-    setInlineInvoiceEdit(null);
-    setPanel("view");
+    router.push(`/retailers/${r.id}`);
   };
 
   const openEdit = (r: RetailerRow) => {
     setSelected(r);
     hydrateFromRetailer(r);
     setPanel("edit");
-  };
-
-  const startEdit = () => {
-    if (!selected) return;
-    openEdit(selected);
   };
 
   function validateRetailerForm(): boolean {
@@ -606,7 +429,7 @@ export function RetailersScreen({
     setRetailers((prev) => prev.map((x) => (x.id === row.id ? row : x)).sort((a, b) => a.name.localeCompare(b.name)));
     setSelected(row);
     toastSuccess("Retailer updated.");
-    setPanel("view");
+    requestClose();
     router.refresh();
   }
 
@@ -640,109 +463,16 @@ export function RetailersScreen({
     router.refresh();
   }
 
-  const companyNameById = useMemo(() => new Map(companies.map((c) => [c.id, c.name ?? ""])), [companies]);
-
-  async function confirmDeleteInvoice() {
-    if (!invoiceDeleteTarget || !selected) return;
-    setInvoiceDeleting(true);
-    const supabase = createClient();
-    const { error } = await supabase.from("retailer_invoices").delete().eq("id", invoiceDeleteTarget.id);
-    setInvoiceDeleting(false);
-    if (error) {
-      toastError(error.message);
-      return;
-    }
-    const prevLen = retailerInvoices.length;
-    const nextInv = retailerInvoices.filter((i) => i.id !== invoiceDeleteTarget.id);
-    setRetailerInvoices(nextInv);
-    setInvoiceCountByRetailer((prev) => ({
-      ...prev,
-      [selected.id]: Math.max(0, (prev[selected.id] ?? prevLen) - 1),
-    }));
-    const t = nextInv.reduce((s, i) => s + Number(i.total_amount ?? 0), 0);
-    const cids = new Set<string>();
-    for (const inv of nextInv) {
-      if (inv.company_id) cids.add(inv.company_id);
-    }
-    setTotalAmountByRetailer((p) => ({ ...p, [selected.id]: t }));
-    setCompanyNamesByRetailer((p) => ({
-      ...p,
-      [selected.id]: [...cids].map((id) => companyNameById.get(id) ?? id).filter(Boolean).sort(),
-    }));
-    if (inlineInvoiceEdit?.id === invoiceDeleteTarget.id) setInlineInvoiceEdit(null);
-    toastSuccess("Invoice deleted.");
-    setInvoiceDeleteTarget(null);
-    router.refresh();
-  }
-
-  const retailerViewStats = useMemo(() => {
-    if (retailerInvoicesLoading) {
-      return {
-        loading: true as const,
-        invoiceCount: invoiceCountByRetailer[selected?.id ?? ""] ?? 0,
-        companyCount: companyNamesByRetailer[selected?.id ?? ""]?.length ?? 0,
-        totalAmount: totalAmountByRetailer[selected?.id ?? ""] ?? 0,
-      };
-    }
-    let total = 0;
-    const cids = new Set<string>();
-    for (const inv of retailerInvoices) {
-      const gross = Number(inv.total_amount ?? 0);
-      const ret = invoiceReturnAmountById[inv.id] ?? 0;
-      total += netInvoiceTotalAfterReturns(gross, ret);
-      if (inv.company_id) cids.add(inv.company_id);
-    }
-    return {
-      loading: false as const,
-      invoiceCount: retailerInvoices.length,
-      companyCount: cids.size,
-      totalAmount: total,
-    };
-  }, [
-    retailerInvoices,
-    retailerInvoicesLoading,
-    selected?.id,
-    invoiceCountByRetailer,
-    companyNamesByRetailer,
-    totalAmountByRetailer,
-    invoiceReturnAmountById,
-  ]);
-
   const totalInvoicesAcrossRetailers = useMemo(
     () => retailers.reduce((sum, r) => sum + (invoiceCountByRetailer[r.id] ?? 0), 0),
     [retailers, invoiceCountByRetailer]
   );
 
-  const filteredRetailers = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return retailers;
-    return retailers.filter(r =>
-      r.name?.toLowerCase().includes(q) ||
-      r.gst_no?.toLowerCase().includes(q) ||
-      r.city?.toLowerCase().includes(q) ||
-      (companyNamesByRetailer[r.id] ?? []).some(n => n.toLowerCase().includes(q))
-    );
-  }, [retailers, searchQuery, companyNamesByRetailer]);
-
-  const linkedCompanyNames = useMemo(() => {
-    if (!selected) return [];
-    if (retailerInvoices.length > 0) {
-      const s = new Set<string>();
-      for (const inv of retailerInvoices) {
-        const n = companyNameById.get(inv.company_id);
-        if (n) s.add(n);
-      }
-      return [...s].sort();
-    }
-    return companyNamesByRetailer[selected.id] ?? [];
-  }, [selected, retailerInvoices, companyNamesByRetailer, companyNameById]);
-
   const panelTitle = useMemo(() => {
     if (panel === "add") return "Add retailer";
     if (panel === "edit") return "Edit retailer";
-    if (panel === "view") return selected?.name ?? "Retailer";
     return "";
-  }, [panel, selected]);
+  }, [panel]);
 
   const formFields = (
     <div className="space-y-4">
@@ -865,18 +595,29 @@ export function RetailersScreen({
         <label htmlFor="r-tax-type" className={labelDark}>
           Tax ID type <span className="text-red-400">*</span>
         </label>
-        <SearchableDropdown
-          id="r-tax-type"
-          value={retailerTaxIdType}
-          onChange={(v) => setRetailerTaxIdType(v === "pan" ? "pan" : "gst")}
-          options={[...TAX_ID_TYPE_OPTIONS]}
-          placeholder="Tax ID type"
-          disabled={saving}
-          showSearch={false}
-          allowClear={false}
-          inputBackground={INPUT_BG}
-          menuZIndex={350}
-        />
+        <div className="relative">
+          <select
+            id="r-tax-type"
+            value={retailerTaxIdType}
+            onChange={(e) => setRetailerTaxIdType(e.target.value === "pan" ? "pan" : "gst")}
+            disabled={saving}
+            className={`${fieldClassDark()} appearance-none pr-9`}
+            style={inputStyle}
+          >
+            <option value="gst">GST</option>
+            <option value="pan">PAN</option>
+          </select>
+          <svg
+            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+          </svg>
+        </div>
       </div>
       <div>
         <label htmlFor="r-gst" className={labelDark}>
@@ -954,13 +695,8 @@ export function RetailersScreen({
           </button>
         </div>
       ) : (
-        <>
-          <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="Search retailers…" />
-          {filteredRetailers.length === 0 ? (
-            <p className="py-10 text-center text-sm text-zinc-500">No retailers match &ldquo;{searchQuery}&rdquo;</p>
-          ) : (
         <ul className="flex flex-col gap-3">
-          {filteredRetailers.map((r) => {
+          {retailers.map((r) => {
             const phoneDigits = phoneDigitsFromStored(r.contact_no);
             const phoneLabel = phoneDigits ? `+91 ${phoneDigits}` : "—";
             const invCount = invoiceCountByRetailer[r.id] ?? 0;
@@ -1011,8 +747,6 @@ export function RetailersScreen({
             );
           })}
         </ul>
-          )}
-        </>
       )}
 
       <button
@@ -1035,7 +769,7 @@ export function RetailersScreen({
             onClick={() => !saving && requestClose()}
           />
           <div
-            className="fixed inset-x-0 bottom-0 top-12 z-[90] flex min-h-0 max-h-[100dvh] flex-col overflow-hidden rounded-t-3xl border border-zinc-600/50 bg-[#16181f] shadow-[0_-16px_48px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] md:left-auto md:right-0 md:top-0 md:max-h-none md:w-full md:max-w-lg md:rounded-none md:rounded-l-3xl md:border-l md:border-t-0"
+            className="fixed inset-x-0 bottom-0 top-12 z-[90] flex min-h-0 max-h-[100dvh] flex-col overflow-hidden rounded-t-[1.75rem] border border-white/[0.09] bg-[#0f1117] shadow-[0_-28px_64px_rgba(0,0,0,0.5)] md:left-auto md:right-0 md:top-0 md:max-h-none md:w-full md:max-w-lg md:rounded-none md:rounded-l-[1.75rem] md:border-l md:border-t-0"
             role="dialog"
             aria-modal="true"
             aria-labelledby="retailer-sheet-title"
@@ -1046,17 +780,16 @@ export function RetailersScreen({
               willChange: "transform",
             }}
           >
-            <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-zinc-600/90 md:hidden" aria-hidden />
-            <div className="relative z-20 flex shrink-0 items-center gap-3 border-b border-zinc-700/70 bg-gradient-to-b from-[#181a22] to-[#16181f] px-4 py-3.5">
+            <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-t-[1.75rem] md:rounded-l-[1.75rem]" aria-hidden>
+              <div className="absolute -left-1/4 -top-32 h-56 w-[150%] bg-gradient-to-b from-violet-600/18 via-fuchsia-600/5 to-transparent blur-2xl" />
+              <div className="absolute -right-8 top-24 h-44 w-44 rounded-full bg-teal-500/12 blur-3xl" />
+              <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/25 to-transparent" />
+            </div>
+            <div className="relative z-10 mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-white/20 md:hidden" aria-hidden />
+            <div className="relative z-20 flex shrink-0 items-center gap-3 border-b border-white/[0.07] bg-black/20 px-4 py-3.5 backdrop-blur-xl">
               <button
                 type="button"
-                onClick={() => {
-                  if (panel === "edit") {
-                    setPanel("view");
-                    return;
-                  }
-                  requestClose();
-                }}
+                onClick={() => requestClose()}
                 className="rounded-xl p-2 text-zinc-400 hover:bg-white/5 hover:text-white"
                 aria-label="Back"
               >
@@ -1082,344 +815,7 @@ export function RetailersScreen({
               </button>
             </div>
 
-            {panel === "view" && selected && !inlineInvoiceEdit && (
-              <div className="shrink-0 border-b border-zinc-800/80 bg-[#16181f] px-4 pb-3 pt-0 shadow-[0_8px_28px_rgba(0,0,0,0.55)]">
-                <div
-                  role="region"
-                  aria-label="Invoice summary for this retailer"
-                  className="mb-3 rounded-xl bg-zinc-900 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ring-1 ring-white/[0.04]"
-                >
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    <div className="flex gap-2.5 rounded-lg border border-zinc-700/50 bg-zinc-950 px-2.5 py-2.5 sm:min-h-[5.5rem]">
-                      <StatIconWrap tone="neutral">
-                        <InvoiceDocIcon className="h-4 w-4" />
-                      </StatIconWrap>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Invoices</p>
-                        {retailerViewStats.loading ? (
-                          <div className="mt-2 h-7 w-12 animate-pulse rounded-md bg-zinc-800/80" aria-hidden />
-                        ) : (
-                          <p className="mt-0.5 text-xl font-bold tabular-nums text-white">{retailerViewStats.invoiceCount}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-2.5 rounded-lg border border-zinc-700/50 bg-zinc-950 px-2.5 py-2.5 sm:min-h-[5.5rem]">
-                      <StatIconWrap tone="cyan">
-                        <BuildingIcon className="h-4 w-4" />
-                      </StatIconWrap>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Companies</p>
-                        {retailerViewStats.loading ? (
-                          <div className="mt-2 h-7 w-12 animate-pulse rounded-md bg-zinc-800/80" aria-hidden />
-                        ) : (
-                          <p className="mt-0.5 text-xl font-bold tabular-nums text-cyan-200">{retailerViewStats.companyCount}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="col-span-2 flex gap-2.5 rounded-lg border border-teal-800/45 bg-zinc-950 px-2.5 py-2.5 ring-1 ring-teal-500/10 sm:col-span-1">
-                      <StatIconWrap tone="teal">
-                        <span className="text-[15px] font-semibold leading-none">₹</span>
-                      </StatIconWrap>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Net total</p>
-                        <p className="text-[9px] font-medium uppercase tracking-wider text-zinc-600">After credit notes</p>
-                        {retailerViewStats.loading ? (
-                          <div className="mt-2 h-7 w-28 max-w-full animate-pulse rounded-md bg-zinc-800/80" aria-hidden />
-                        ) : (
-                          <p className="mt-0.5 truncate font-mono text-base font-bold tabular-nums tracking-tight text-teal-200 sm:text-lg">
-                            {formatInr(retailerViewStats.totalAmount)}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  role="tablist"
-                  aria-label="Retailer details"
-                  className="flex gap-1 rounded-xl border border-zinc-700/70 bg-zinc-950 p-1 shadow-[inset_0_2px_8px_rgba(0,0,0,0.35)] ring-1 ring-white/[0.04]"
-                >
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={retailerViewTab === "profile"}
-                    id="tab-retailer-profile"
-                    aria-controls="panel-retailer-profile"
-                    onClick={() => {
-                      setRetailerViewTab("profile");
-                      setInlineInvoiceEdit(null);
-                    }}
-                    className={`relative flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition ${
-                      retailerViewTab === "profile"
-                        ? "bg-zinc-600 text-white shadow-[0_2px_8px_rgba(0,0,0,0.35)] ring-1 ring-white/10"
-                        : "text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300"
-                    }`}
-                  >
-                    <PersonIcon className="h-4 w-4 shrink-0 opacity-90" />
-                    Retailer
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={retailerViewTab === "invoices"}
-                    id="tab-retailer-invoices"
-                    aria-controls="panel-retailer-invoices"
-                    onClick={() => setRetailerViewTab("invoices")}
-                    className={`relative flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition ${
-                      retailerViewTab === "invoices"
-                        ? "bg-zinc-600 text-white shadow-[0_2px_8px_rgba(0,0,0,0.35)] ring-1 ring-white/10"
-                        : "text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300"
-                    }`}
-                  >
-                    <InvoiceDocIcon className="h-4 w-4 shrink-0 opacity-90" />
-                    <span>Invoices</span>
-                    {!retailerInvoicesLoading ? (
-                      <span
-                        className={`min-w-[1.25rem] rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${
-                          retailerViewTab === "invoices" ? "bg-violet-500/25 text-violet-100" : "bg-zinc-800 text-zinc-400"
-                        }`}
-                      >
-                        {retailerInvoices.length}
-                      </span>
-                    ) : (
-                      <span className="h-4 w-4 animate-pulse rounded bg-zinc-700" aria-hidden />
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div
-              className={`relative min-h-0 min-w-0 flex-1 bg-[#16181f] px-4 py-4 ${
-                inlineInvoiceEdit
-                  ? "flex flex-col overflow-hidden pb-6"
-                  : "overflow-y-auto overscroll-contain pb-32"
-              }`}
-            >
-              {panel === "view" && selected && (
-                <div
-                  className={
-                    inlineInvoiceEdit ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" : undefined
-                  }
-                >
-                  {retailerViewTab === "profile" ? (
-                    <section
-                      id="panel-retailer-profile"
-                      role="tabpanel"
-                      aria-labelledby="tab-retailer-profile"
-                      className="relative z-0"
-                    >
-                      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <p className="max-w-md text-xs leading-relaxed text-zinc-500">
-                          Contact and GST for this retailer, plus companies they appear on via invoices.
-                        </p>
-                        <div className="relative z-0 flex w-full shrink-0 items-center gap-2 rounded-xl border border-zinc-800/90 bg-zinc-900 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:w-auto">
-                          <button
-                            type="button"
-                            onClick={startEdit}
-                            className="min-h-[40px] flex-1 rounded-lg border border-zinc-600/70 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 transition hover:border-zinc-500 hover:bg-zinc-700 hover:text-white sm:flex-none"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTarget(selected)}
-                            className="min-h-[40px] flex-1 rounded-lg border border-red-500/45 bg-red-950 px-4 py-2 text-sm font-medium text-red-200 transition hover:border-red-400/60 hover:bg-red-900 sm:flex-none"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-
-                      <ViewSectionCard className="mb-4">
-                        <ViewSubsectionLabel>Linked companies</ViewSubsectionLabel>
-                        <div className="px-3 py-3 sm:px-4">
-                          {linkedCompanyNames.length === 0 ? (
-                            <p className="text-sm text-zinc-500">No invoices yet—companies will show here once you bill this retailer.</p>
-                          ) : (
-                            <ul className="flex flex-wrap gap-2">
-                              {linkedCompanyNames.map((name) => (
-                                <li
-                                  key={name}
-                                  className="rounded-lg border border-zinc-700/60 bg-zinc-900 px-2.5 py-1.5 text-sm font-medium text-zinc-200"
-                                >
-                                  {name}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      </ViewSectionCard>
-
-                      <ViewSectionCard>
-                        <ViewSubsectionLabel>Contact &amp; registration</ViewSubsectionLabel>
-                        <div className="px-3 pb-2 pt-0.5 sm:px-4">
-                          <ViewRow label="Name" value={selected.name ?? ""} />
-                          <ViewRow label="Address" value={selected.address ?? ""} />
-                          <ViewRow label="Contact person name" value={selected.contact_person_name ?? ""} />
-                          <ViewRow label="Telephone" value={selected.telephone ?? ""} />
-                          <ViewRow
-                            label="Phone no."
-                            value={phoneDigitsFromStored(selected.contact_no) ? `+91 ${phoneDigitsFromStored(selected.contact_no)}` : ""}
-                            mono
-                          />
-                          <ViewRow
-                            label="Alternative no."
-                            value={
-                              phoneDigitsFromStored(selected.alternative_phone)
-                                ? `+91 ${phoneDigitsFromStored(selected.alternative_phone)}`
-                                : ""
-                            }
-                            mono
-                          />
-                          <ViewRow
-                            label={parseRetailerTaxId(selected.gst_no).type === "pan" ? "PAN no." : "GST no."}
-                            value={parseRetailerTaxId(selected.gst_no).value}
-                            mono
-                          />
-                        </div>
-                      </ViewSectionCard>
-                    </section>
-                  ) : (
-                    <section
-                      id="panel-retailer-invoices"
-                      role="tabpanel"
-                      aria-labelledby="tab-retailer-invoices"
-                      className={`relative z-0 ${inlineInvoiceEdit ? "flex min-h-0 flex-1 flex-col" : ""}`}
-                    >
-                      {inlineInvoiceEdit ? (
-                        <div className="flex min-h-0 flex-1 flex-col">
-                          <div className="mb-4 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => setInlineInvoiceEdit(null)}
-                              className="inline-flex items-center gap-2 rounded-lg border border-zinc-700/80 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800"
-                            >
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                                <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                              Back to list
-                            </button>
-                            <p className="mt-3 text-sm text-zinc-400">
-                              Editing{" "}
-                              <span className="font-mono font-semibold text-white">{inlineInvoiceEdit.invoice_number}</span>
-                            </p>
-                          </div>
-                          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                            <InvoiceEditForm
-                              invoice={inlineInvoiceEdit}
-                              companies={companies}
-                              onSaved={(row) => {
-                                const next = retailerInvoices.map((x) => (x.id === row.id ? row : x));
-                                setRetailerInvoices(next);
-                                let total = 0;
-                                const cids = new Set<string>();
-                                for (const inv of next) {
-                                  total += Number(inv.total_amount ?? 0);
-                                  if (inv.company_id) cids.add(inv.company_id);
-                                }
-                                setTotalAmountByRetailer((p) => ({ ...p, [selected.id]: total }));
-                                setCompanyNamesByRetailer((p) => ({
-                                  ...p,
-                                  [selected.id]: [...cids].map((id) => companyNameById.get(id) ?? id).filter(Boolean).sort(),
-                                }));
-                                setInlineInvoiceEdit(null);
-                                router.refresh();
-                              }}
-                              onCancel={() => setInlineInvoiceEdit(null)}
-                              onGoodsReturnsChanged={() => setInvoiceReturnsRefreshKey((k) => k + 1)}
-                              onPaymentsChanged={(invId, patch) => {
-                                setInvoiceReturnsRefreshKey((k) => k + 1);
-                                setInlineInvoiceEdit((prev) => (prev?.id === invId ? { ...prev, ...patch } : prev));
-                                setRetailerInvoices((prev) => prev.map((x) => (x.id === invId ? { ...x, ...patch } : x)));
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <p className="mb-4 text-xs leading-relaxed text-zinc-500">
-                            Invoices for this retailer. Edit here without leaving; delete removes the invoice permanently.
-                          </p>
-                          <ViewSectionCard className="border-violet-900/35 ring-violet-500/[0.07]">
-                            {retailerInvoicesLoading ? (
-                              <div className="flex items-center gap-3 px-4 py-8">
-                                <span
-                                  className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-zinc-600 border-t-violet-400"
-                                  aria-hidden
-                                />
-                                <p className="text-sm text-zinc-400">Loading invoices…</p>
-                              </div>
-                            ) : retailerInvoices.length === 0 ? (
-                              <div className="px-4 py-10 text-center">
-                                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800/80 bg-zinc-900/50 text-zinc-600">
-                                  <InvoiceDocIcon className="h-6 w-6" />
-                                </div>
-                                <p className="text-sm font-medium text-zinc-300">No invoices yet</p>
-                                <p className="mt-1 text-xs text-zinc-500">Create an invoice from the Invoices tab and select this retailer.</p>
-                              </div>
-                            ) : (
-                              <ul>
-                                {retailerInvoices.map((inv) => {
-                                  const coName = companyNameById.get(inv.company_id) ?? "—";
-                                  const gross = Number(inv.total_amount ?? 0);
-                                  const ret = invoiceReturnAmountById[inv.id] ?? 0;
-                                  const net = netInvoiceTotalAfterReturns(gross, ret);
-                                  return (
-                                    <li
-                                      key={inv.id}
-                                      className="flex flex-wrap items-center gap-3 border-b border-zinc-800/45 px-3 py-4 transition-colors last:border-b-0 hover:bg-zinc-900/45 sm:flex-nowrap sm:px-4"
-                                    >
-                                      <div className="min-w-0 flex-1">
-                                        <p className="font-semibold tracking-tight text-white">{inv.invoice_number}</p>
-                                        <p className="mt-0.5 text-xs text-violet-200/90">{coName}</p>
-                                        <p className="mt-0.5 text-xs text-zinc-500">
-                                          {(inv.bill_date ?? "").slice(0, 10)}
-                                        </p>
-                                        <div className="mt-1.5 space-y-0.5">
-                                          <p className="font-mono text-sm font-medium tabular-nums text-teal-200">
-                                            Net total: {formatInr(net)}
-                                          </p>
-                                          {ret > 0 ? (
-                                            <p className="text-[11px] leading-snug text-zinc-500">
-                                              Bill {formatInr(gross)} · Credit notes −{formatInr(ret)}
-                                            </p>
-                                          ) : null}
-                                          <p className="font-mono text-xs font-medium tabular-nums text-sky-200/90">
-                                            Transport: {formatInr(Number(inv.transportation_amount ?? 0))}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      <div className="flex w-full shrink-0 gap-2 sm:w-auto">
-                                        <button
-                                          type="button"
-                                          onClick={() => setInlineInvoiceEdit(inv)}
-                                          className="flex-1 rounded-lg border border-zinc-600/60 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-100 transition hover:border-zinc-500 hover:bg-zinc-800 hover:text-white sm:flex-none"
-                                        >
-                                          Edit
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => setInvoiceDeleteTarget(inv)}
-                                          className="flex-1 rounded-lg border border-red-500/35 bg-red-950 px-3 py-2 text-sm font-medium text-red-200 transition hover:border-red-400/50 hover:bg-red-900 sm:flex-none"
-                                        >
-                                          Delete
-                                        </button>
-                                      </div>
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                            )}
-                          </ViewSectionCard>
-                        </>
-                      )}
-                    </section>
-                  )}
-                </div>
-              )}
-
+            <div className="relative z-10 min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 pb-32">
               {(panel === "add" || panel === "edit") && (
                 <form
                   id="retailer-form"
@@ -1435,7 +831,7 @@ export function RetailersScreen({
             </div>
 
             {panel === "add" && (
-              <div className="absolute bottom-0 left-0 right-0 border-t border-zinc-700/80 bg-[#16181f]/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
+              <div className="absolute bottom-0 left-0 right-0 z-20 border-t border-white/[0.08] bg-[#0f1117]/90 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl">
                 <div className="flex gap-3">
                   <button
                     type="button"
@@ -1458,12 +854,12 @@ export function RetailersScreen({
             )}
 
             {panel === "edit" && (
-              <div className="absolute bottom-0 left-0 right-0 border-t border-zinc-700/80 bg-[#16181f]/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
+              <div className="absolute bottom-0 left-0 right-0 z-20 border-t border-white/[0.08] bg-[#0f1117]/90 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl">
                 <div className="flex gap-3">
                   <button
                     type="button"
                     disabled={saving}
-                    onClick={() => selected && setPanel("view")}
+                    onClick={() => requestClose()}
                     className="min-h-[48px] flex-1 rounded-xl border border-white/20 py-3 text-sm font-semibold text-white hover:bg-white/5 disabled:opacity-50"
                   >
                     Cancel
@@ -1520,42 +916,6 @@ export function RetailersScreen({
         </>
       )}
 
-      {invoiceDeleteTarget && (
-        <>
-          <div className="fixed inset-0 z-[100] bg-black/70" aria-hidden onClick={() => !invoiceDeleting && setInvoiceDeleteTarget(null)} />
-          <div
-            role="alertdialog"
-            aria-labelledby="retailer-inv-del-title"
-            className="fixed left-1/2 top-1/2 z-[101] w-[min(100%-2rem,22rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-zinc-700 bg-[#1A1C26] p-5 shadow-xl"
-          >
-            <h3 id="retailer-inv-del-title" className="text-lg font-semibold text-white">
-              Delete invoice?
-            </h3>
-            <p className="mt-2 text-sm text-zinc-400">
-              Remove invoice{" "}
-              <span className="font-medium text-white">&ldquo;{invoiceDeleteTarget.invoice_number}&rdquo;</span>? This cannot be undone.
-            </p>
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                disabled={invoiceDeleting}
-                onClick={() => setInvoiceDeleteTarget(null)}
-                className="rounded-xl px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-white/5 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={invoiceDeleting}
-                onClick={() => void confirmDeleteInvoice()}
-                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-              >
-                {invoiceDeleting ? "Deleting…" : "Delete"}
-              </button>
-            </div>
-          </div>
-        </>
-      )}
     </div>
   );
 }

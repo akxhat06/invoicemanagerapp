@@ -3,7 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import type { CompanyRow } from "@/types/company";
 import type { RetailerRow } from "@/types/retailer";
 
-export default async function RetailersPage() {
+type PageProps = { searchParams: Promise<{ edit?: string }> };
+
+export default async function RetailersPage({ searchParams }: PageProps) {
+  const { edit: editRetailerId } = await searchParams;
   const supabase = await createClient();
 
   const [retRes, invRes, coRes] = await Promise.all([
@@ -54,6 +57,7 @@ export default async function RetailersPage() {
       initialInvoiceCountByRetailer={invoiceCountByRetailer}
       initialCompanyNamesByRetailer={companyNamesByRetailer}
       initialTotalAmountByRetailer={totalAmountByRetailer}
+      editRetailerId={editRetailerId ?? null}
     />
   );
 }
