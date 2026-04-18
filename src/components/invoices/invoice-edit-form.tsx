@@ -15,7 +15,8 @@ import type {
   RetailerInvoiceRow,
 } from "@/types/invoice";
 import type { RetailerRow } from "@/types/retailer";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import type { CommissionRow } from "@/types/commission";
+import React, { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 
 function roundGoodsReturnAmount(n: number): number {
   return Math.round(n * 100) / 100;
@@ -165,7 +166,7 @@ export function InvoiceEditForm({
   const [lrNo, setLrNo] = useState("");
   const [lrDate, setLrDate] = useState(todayISODate());
   const [transportAmount, setTransportAmount] = useState("");
-  const [activeTab, setActiveTab] = useState<"main" | "transport" | "credit" | "payment">("main");
+  const [activeTab, setActiveTab] = useState<"main" | "transport" | "credit" | "payment" | "commission">("main");
 
   const [goodsReturns, setGoodsReturns] = useState<InvoiceGoodsReturnRow[]>([]);
   const [loadingReturns, setLoadingReturns] = useState(false);
@@ -189,6 +190,13 @@ export function InvoiceEditForm({
   const [payNote, setPayNote] = useState("");
   /** Sum of `invoice_goods_returns.amount` for this invoice (loaded with the Payment tab). */
   const [paymentReturnsLoadedSum, setPaymentReturnsLoadedSum] = useState(0);
+
+  // Commission tab state
+  const [loadingCommission, setLoadingCommission] = useState(false);
+  const [savingCommission, setSavingCommission] = useState(false);
+  const [existingCommission, setExistingCommission] = useState<CommissionRow | null>(null);
+  const [commissionPct, setCommissionPct] = useState("");
+  const commissionLoadedForInvoiceRef = useRef<string | null>(null);
 
   /** Avoid full-screen credit loading (and unmounting fields) when revisiting the Credit tab for the same invoice. */
   const creditListLoadedForInvoiceRef = useRef<string | null>(null);
@@ -492,6 +500,75 @@ export function InvoiceEditForm({
     // `invoice.total_amount` is read via `invoiceForPaymentRef` after the fetch so suggestions stay fresh
     // without re-running this effect on every main-tab change (avoids refetch/HMR churn).
   }, [activeTab, invoice.id, resetPaymentToNew, startEditPayment]);
+
+  // Fetch commission for this invoice when the commission tab is opened
+  useEffect(() => {
+    if (activeTab !== "commission") return;
+    const invoiceId = invoice.id;
+    if (commissionLoadedForInvoiceRef.current === invoiceId) return;
+    let cancelled = false;
+    setLoadingCommission(true);
+    setExistingCommission(null);
+    void (async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("commissions")
+        .select("*")
+        .eq("invoice_id", invoiceId)
+        .maybeSingle();
+      if (cancelled) return;
+      setLoadingCommission(false);
+      if (error) { toastError(error.message); return; }
+      commissionLoadedForInvoiceRef.current = invoiceId;
+      if (data) {
+        setExistingCommission(data as CommissionRow);
+        setCommissionPct(String(data.commission_percent ?? ""));
+      } else {
+        setExistingCommission(null);
+        setCommissionPct("");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, invoice.id]);
+
+  async function saveCommissionInline(e?: React.FormEvent) {
+    e?.preventDefault();
+    const pct = parseFloat(commissionPct);
+    if (!Number.isFinite(pct) || pct <= 0) return toastError("Enter a valid commission %.");
+    const basic = round2(Number(invoice.basic_amount ?? 0));
+    const gst = round2(Number(invoice.gst_amount ?? 0));
+    const amount = round2((basic * pct) / 100);
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return toastError("You must be signed in.");
+    setSavingCommission(true);
+    if (existingCommission) {
+      const { error } = await supabase
+        .from("commissions")
+        .update({ commission_percent: pct, commission_amount: amount, updated_at: new Date().toISOString() })
+        .eq("id", existingCommission.id);
+      setSavingCommission(false);
+      if (error) return toastError(error.message);
+      setExistingCommission((prev) => prev ? { ...prev, commission_percent: pct, commission_amount: amount } : prev);
+    } else {
+      const payload = {
+        user_id: user.id,
+        retailer_id: invoice.retailer_id ?? "",
+        invoice_id: invoice.id,
+        invoice_number: invoice.invoice_number,
+        retailer_name: invoice.retailer_name ?? "",
+        basic_amount: basic,
+        gst_amount: gst,
+        commission_percent: pct,
+        commission_amount: amount,
+      };
+      const { data, error } = await supabase.from("commissions").insert(payload).select().single();
+      setSavingCommission(false);
+      if (error) return toastError(error.message);
+      setExistingCommission(data as CommissionRow);
+    }
+    toastSuccess("Commission saved.");
+  }
 
   async function saveCreditNoteInline(e?: FormEvent) {
     e?.preventDefault();
@@ -920,7 +997,7 @@ export function InvoiceEditForm({
       {/* Scroll only the form; footer stays after all fields (never between inputs). */}
       <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
         <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-1 ring-1 ring-white/[0.03]">
-          <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-1 sm:grid-cols-5">
             <button
               type="button"
               onClick={() => setActiveTab("main")}
@@ -968,6 +1045,18 @@ export function InvoiceEditForm({
               }`}
             >
               Payment
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("commission")}
+              aria-pressed={activeTab === "commission"}
+              className={`rounded-xl px-2 py-2 text-xs font-semibold transition sm:px-3 sm:text-sm ${
+                activeTab === "commission"
+                  ? "bg-violet-500/15 text-violet-100 ring-1 ring-violet-500/25"
+                  : "text-zinc-400 hover:bg-zinc-900/70 hover:text-zinc-200"
+              }`}
+            >
+              Commission
             </button>
           </div>
         </div>
@@ -1362,7 +1451,7 @@ export function InvoiceEditForm({
             )}
           </div>
         </form>
-        ) : (
+        ) : activeTab === "payment" ? (
         <form id="invoice-payment-form" className="space-y-5 pb-28 sm:pb-32" onSubmit={(e) => void savePaymentInline(e)}>
           <div className={SECTION_WRAP}>
             <h3 className={SECTION_TITLE}>Payments</h3>
@@ -1600,6 +1689,89 @@ export function InvoiceEditForm({
             )}
           </div>
         </form>
+        ) : (
+          <form id="invoice-commission-form" className="space-y-5 pb-28 sm:pb-32" onSubmit={(e) => void saveCommissionInline(e)}>
+            {/* Header */}
+            <div className="pt-2">
+              <p className="text-sm font-semibold text-zinc-200">Commission</p>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                {existingCommission ? "Edit the commission for this invoice." : "Add commission for this invoice."}
+              </p>
+            </div>
+
+            {loadingCommission ? (
+              <div className="flex items-center justify-center py-10">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+              </div>
+            ) : (
+              <>
+                {/* Auto-filled read-only fields */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">Basic Amount</p>
+                    <div className="rounded-xl border border-white/10 bg-[#1E1E24] px-3.5 py-3 text-[15px] text-zinc-300">
+                      ₹ {round2(Number(invoice.basic_amount ?? 0)).toLocaleString("en-IN")}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">GST Amount</p>
+                    <div className="rounded-xl border border-white/10 bg-[#1E1E24] px-3.5 py-3 text-[15px] text-zinc-300">
+                      ₹ {round2(Number(invoice.gst_amount ?? 0)).toLocaleString("en-IN")}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Commission % input */}
+                <div>
+                  <label htmlFor="inv-com-pct" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    Commission %
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="inv-com-pct"
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="e.g. 5"
+                      value={commissionPct}
+                      onChange={(e) => setCommissionPct(e.target.value)}
+                      disabled={savingCommission}
+                      className="w-full rounded-xl border border-white/10 bg-[#1E1E24] px-3.5 py-3 pr-9 text-[15px] text-white outline-none transition placeholder:text-zinc-500 hover:border-white/15 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/15 disabled:opacity-50"
+                    />
+                    <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-sm text-zinc-500">%</span>
+                  </div>
+                </div>
+
+                {/* Commission amount display */}
+                {(() => {
+                  const basic = round2(Number(invoice.basic_amount ?? 0));
+                  const pct = parseFloat(commissionPct);
+                  const amount = Number.isFinite(pct) && pct > 0 && basic > 0 ? round2((basic * pct) / 100) : 0;
+                  return (
+                    <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.07] px-4 py-4">
+                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-violet-400">Commission Amount</p>
+                      <p className="text-2xl font-bold tracking-tight text-white">
+                        {amount > 0
+                          ? formatInr(amount)
+                          : <span className="text-zinc-600">₹ —</span>}
+                      </p>
+                      {amount > 0 && (
+                        <p className="mt-1 text-xs text-zinc-500">
+                          {commissionPct}% of {formatInr(basic)} (basic amount)
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Existing commission info */}
+                {existingCommission && (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-xs text-zinc-400">
+                    Last saved: {formatInr(round2(Number(existingCommission.commission_amount)))} at {existingCommission.commission_percent}%
+                  </div>
+                )}
+              </>
+            )}
+          </form>
         )}
       </div>
 
@@ -1613,7 +1785,16 @@ export function InvoiceEditForm({
           >
             Cancel
           </button>
-          {activeTab === "credit" ? (
+          {activeTab === "commission" ? (
+            <button
+              type="submit"
+              form="invoice-commission-form"
+              disabled={savingCommission || loadingCommission}
+              className="min-h-[48px] flex-1 rounded-xl bg-gradient-to-br from-violet-300 to-violet-200 py-3 text-sm font-semibold text-violet-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition hover:from-violet-200 hover:to-violet-100 disabled:opacity-50"
+            >
+              {savingCommission ? "Saving…" : "Save commission"}
+            </button>
+          ) : activeTab === "credit" ? (
             <button
               type="submit"
               form="invoice-credit-form"

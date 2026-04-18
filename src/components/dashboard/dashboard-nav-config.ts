@@ -4,7 +4,8 @@ export type DashboardNavKey =
   | "retailers"
   | "invoices"
   | "payments"
-  | "credit_notes";
+  | "credit_notes"
+  | "commission";
 
 export type DashboardNavItem = {
   key: DashboardNavKey;
@@ -21,6 +22,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { key: "invoices", label: "Invoices", href: "/invoices", showBadge: true },
   { key: "payments", label: "Payments", href: "/payments" },
   { key: "credit_notes", label: "Credit Note", href: "/credit-notes" },
+  { key: "commission", label: "Commission", href: "/commission" },
 ];
 
 /** Path without query/hash; no trailing slash except root. */
@@ -39,5 +41,6 @@ export function isDashboardNavActive(pathname: string, key: DashboardNavKey): bo
   if (key === "invoices") return p === "/invoices" || p.startsWith("/invoices/");
   if (key === "payments") return p === "/payments" || p.startsWith("/payments/");
   if (key === "credit_notes") return p === "/credit-notes" || p.startsWith("/credit-notes/");
+  if (key === "commission") return p === "/commission" || p.startsWith("/commission/");
   return false;
 }

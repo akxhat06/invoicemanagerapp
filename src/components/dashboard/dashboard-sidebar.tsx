@@ -74,6 +74,16 @@ function IconCreditNote({ className }: { className?: string }) {
   );
 }
 
+function IconCommission({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="9" cy="9" r="3" />
+      <circle cx="15" cy="15" r="3" />
+      <path d="M5 19L19 5" />
+    </svg>
+  );
+}
+
 const ICONS: Record<DashboardNavKey, typeof IconDashboard> = {
   dashboard: IconDashboard,
   companies: IconCompanies,
@@ -81,6 +91,7 @@ const ICONS: Record<DashboardNavKey, typeof IconDashboard> = {
   invoices: IconInvoices,
   payments: IconPayments,
   credit_notes: IconCreditNote,
+  commission: IconCommission,
 };
 
 const ACCENT = "#c4b5fd";
