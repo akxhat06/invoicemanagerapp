@@ -1,0 +1,123 @@
+<svg
+  width="64"
+  height="64"
+  viewBox="0 0 64 64"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+  aria-label="Bot"
+  role="img"
+>
+  <defs>
+    <filter id="bot-glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <linearGradient id="bot-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a78bfa" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+
+    <radialGradient id="eye-grad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#e0f2fe" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </radialGradient>
+
+    <radialGradient id="pulse-grad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <style>
+    @keyframes bot-float {
+      0%, 100% { transform: translateY(0px); }
+      50%       { transform: translateY(-4px); }
+    }
+    @keyframes bot-pulse {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50%       { opacity: 1;   transform: scale(1.15); }
+    }
+    @keyframes bot-blink {
+      0%, 44%, 56%, 100% { transform: scaleY(1); }
+      50%                 { transform: scaleY(0.08); }
+    }
+    @keyframes bot-glow-dot {
+      0%, 100% { opacity: 0.5; }
+      50%       { opacity: 1; }
+    }
+    @keyframes bot-speaker-1 {
+      0%, 100% { opacity: 0.3; } 50% { opacity: 1; }
+    }
+    @keyframes bot-speaker-2 {
+      0%, 100% { opacity: 0.3; } 50% { opacity: 1; }
+    }
+    @keyframes bot-speaker-3 {
+      0%, 100% { opacity: 0.3; } 50% { opacity: 1; }
+    }
+    @keyframes bot-speaker-4 {
+      0%, 100% { opacity: 0.3; } 50% { opacity: 1; }
+    }
+
+    .bot-float    { animation: bot-float 3s ease-in-out infinite; }
+    .bot-pulse    { animation: bot-pulse 2.4s ease-in-out infinite; transform-origin: 32px 34px; }
+    .bot-blink-l  { animation: bot-blink 4s ease-in-out infinite; transform-origin: 24px 26px; }
+    .bot-blink-r  { animation: bot-blink 4s ease-in-out infinite; transform-origin: 40px 26px; }
+    .bot-dot      { animation: bot-glow-dot 2.4s ease-in-out infinite; }
+    .bot-spk-1    { animation: bot-speaker-1 1.2s ease-in-out infinite 0s; }
+    .bot-spk-2    { animation: bot-speaker-2 1.2s ease-in-out infinite 0.2s; }
+    .bot-spk-3    { animation: bot-speaker-3 1.2s ease-in-out infinite 0.4s; }
+    .bot-spk-4    { animation: bot-speaker-4 1.2s ease-in-out infinite 0.6s; }
+  </style>
+
+  <!-- Pulse ring (behind everything) -->
+  <circle cx="32" cy="34" r="28" fill="url(#pulse-grad)" class="bot-pulse" />
+
+  <!-- Floating group -->
+  <g class="bot-float">
+
+    <!-- Antenna -->
+    <line x1="32" y1="10" x2="32" y2="16" stroke="url(#bot-grad)" stroke-width="2" stroke-linecap="round" />
+    <circle cx="32" cy="8" r="2.5" fill="url(#bot-grad)" filter="url(#bot-glow)" class="bot-dot" />
+
+    <!-- Head shell -->
+    <rect x="14" y="16" width="36" height="28" rx="6" fill="#0f0f1a" stroke="url(#bot-grad)" stroke-width="1.5" />
+
+    <!-- Circuit corner traces -->
+    <polyline points="17,19 17,22 20,22" fill="none" stroke="#7c3aed" stroke-width="0.8" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round" />
+    <polyline points="47,19 47,22 44,22" fill="none" stroke="#38bdf8" stroke-width="0.8" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round" />
+    <polyline points="17,41 17,38 20,38" fill="none" stroke="#7c3aed" stroke-width="0.8" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round" />
+    <polyline points="47,41 47,38 44,38" fill="none" stroke="#38bdf8" stroke-width="0.8" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round" />
+    <line x1="28" y1="38" x2="36" y2="38" stroke="#a78bfa" stroke-width="0.8" stroke-opacity="0.5" stroke-linecap="round" />
+
+    <!-- Left eye socket -->
+    <rect x="19" y="22" width="10" height="8" rx="2" fill="#1a1a2e" stroke="#38bdf8" stroke-width="1" />
+    <!-- Right eye socket -->
+    <rect x="35" y="22" width="10" height="8" rx="2" fill="#1a1a2e" stroke="#38bdf8" stroke-width="1" />
+
+    <!-- Left pupil (blinks) -->
+    <rect x="22" y="24" width="4" height="4" rx="1" fill="url(#eye-grad)" filter="url(#bot-glow)" class="bot-blink-l" />
+    <!-- Right pupil (blinks) -->
+    <rect x="38" y="24" width="4" height="4" rx="1" fill="url(#eye-grad)" filter="url(#bot-glow)" class="bot-blink-r" />
+
+    <!-- Mouth grille -->
+    <rect x="22" y="34" width="20" height="5" rx="2" fill="#1a1a2e" stroke="#7c3aed" stroke-width="1" />
+    <!-- Speaker dots -->
+    <circle cx="26" cy="36.5" r="1" fill="#a78bfa" class="bot-spk-1" />
+    <circle cx="30" cy="36.5" r="1" fill="#a78bfa" class="bot-spk-2" />
+    <circle cx="34" cy="36.5" r="1" fill="#a78bfa" class="bot-spk-3" />
+    <circle cx="38" cy="36.5" r="1" fill="#a78bfa" class="bot-spk-4" />
+
+    <!-- Side ears -->
+    <rect x="10" y="22" width="4" height="8" rx="1.5" fill="#0f0f1a" stroke="url(#bot-grad)" stroke-width="1.2" />
+    <rect x="50" y="22" width="4" height="8" rx="1.5" fill="#0f0f1a" stroke="url(#bot-grad)" stroke-width="1.2" />
+    <circle cx="12" cy="26" r="1" fill="#38bdf8" class="bot-dot" />
+    <circle cx="52" cy="26" r="1" fill="#38bdf8" class="bot-dot" />
+
+
+
+  </g>
+</svg>
