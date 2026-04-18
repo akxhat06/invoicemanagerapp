@@ -38,6 +38,8 @@ export default async function DashboardHomePage() {
     invLastRes,
     invBilledSumRes,
     paymentsSumRes,
+    commissionRes,
+    commissionAmtRes,
   ] = await Promise.all([
     supabase.from("companies").select("id", { count: "exact", head: true }),
     supabase.from("companies").select("id", { count: "exact", head: true }).or("is_draft.eq.false,is_draft.is.null"),
@@ -59,6 +61,8 @@ export default async function DashboardHomePage() {
       .select("id, total_amount")
       .or("is_draft.eq.false,is_draft.is.null"),
     supabase.from("invoice_payments").select("amount, invoice_id"),
+    supabase.from("commissions").select("id", { count: "exact", head: true }),
+    supabase.from("commissions").select("commission_amount"),
   ]);
 
   const err =
@@ -70,7 +74,9 @@ export default async function DashboardHomePage() {
     invThisRes.error ||
     invLastRes.error ||
     invBilledSumRes.error ||
-    paymentsSumRes.error;
+    paymentsSumRes.error ||
+    commissionRes.error ||
+    commissionAmtRes.error;
 
   if (err) {
     return (
@@ -87,6 +93,12 @@ export default async function DashboardHomePage() {
   const invoiceCount = invRes.count ?? 0;
   const invoicesThisMonth = invThisRes.count ?? 0;
   const invoicesLastMonth = invLastRes.count ?? 0;
+  const commissionCount = commissionRes.count ?? 0;
+  const totalCommissionAmount = (commissionAmtRes.data ?? []).reduce((s, r) => {
+    const v = (r as { commission_amount?: number | string | null }).commission_amount;
+    const n = v === null || v === undefined ? 0 : typeof v === "string" ? parseFloat(v) : Number(v);
+    return s + (Number.isFinite(n) ? n : 0);
+  }, 0);
 
   let invoiceMonthTrendPct: number | null = null;
   if (invoicesLastMonth > 0) {
@@ -135,6 +147,8 @@ export default async function DashboardHomePage() {
       invoiceCount={invoiceCount}
       invoicesThisMonth={invoicesThisMonth}
       invoiceMonthTrendPct={invoiceMonthTrendPct}
+      commissionCount={commissionCount}
+      totalCommissionAmount={totalCommissionAmount}
     />
   );
 }
