@@ -41,6 +41,13 @@ type Props = {
   listMaxHeight?: string;
   /** `aria-label` on the trigger when no visible label is associated. */
   "aria-label"?: string;
+  /**
+   * Where to open the menu relative to the trigger. Default `auto` prefers below
+   * (fixes upward-only menus in modals near the bottom of the viewport).
+   */
+  placement?: "auto" | "below" | "above";
+  /** Compact trigger height and text (e.g. dense modals). */
+  size?: "default" | "sm";
 };
 
 export function SearchableDropdown({
@@ -61,6 +68,8 @@ export function SearchableDropdown({
   menuZIndex = 300,
   listMaxHeight = DEFAULT_LIST_MAX_HEIGHT,
   "aria-label": ariaLabel,
+  placement = "auto",
+  size = "default",
 }: Props) {
   const uid = useId();
   const baseId = idProp ?? `dropdown-${uid.replace(/:/g, "")}`;
@@ -75,7 +84,13 @@ export function SearchableDropdown({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [mounted, setMounted] = useState(false);
-  const [menuPos, setMenuPos] = useState({ left: 0, width: 0, bottom: 0, maxHeight: 320 });
+  const [menuPos, setMenuPos] = useState<{
+    left: number;
+    width: number;
+    maxHeight: number;
+    top?: number;
+    bottom?: number;
+  }>({ left: 0, width: 0, maxHeight: 320 });
 
   const labelByValue = useMemo(() => new Map(options.map((o) => [o.value, o.label])), [options]);
 
@@ -95,22 +110,46 @@ export function SearchableDropdown({
     if (!el) return;
     const r = el.getBoundingClientRect();
     const gap = 4;
-    const marginTop = 8;
-    const bottom = window.innerHeight - r.top + gap;
-    const maxHeight = Math.max(160, r.top - gap - marginTop);
+    const edge = 8;
     const vw = window.innerWidth;
-    const pad = 8;
+    const vh = window.innerHeight;
     let left = r.left;
-    if (left + r.width > vw - pad) {
-      left = Math.max(pad, vw - r.width - pad);
+    if (left + r.width > vw - edge) {
+      left = Math.max(edge, vw - r.width - edge);
     }
-    setMenuPos({
-      left,
-      width: r.width,
-      bottom,
-      maxHeight,
-    });
-  }, []);
+
+    const spaceBelow = vh - r.bottom - gap - edge;
+    const spaceAbove = r.top - gap - edge;
+    const minOpen = 120;
+
+    let useBelow: boolean;
+    if (placement === "below") {
+      useBelow = true;
+    } else if (placement === "above") {
+      useBelow = false;
+    } else {
+      useBelow =
+        spaceBelow >= minOpen && (spaceBelow >= spaceAbove || spaceAbove < minOpen);
+    }
+
+    if (useBelow) {
+      setMenuPos({
+        left,
+        width: r.width,
+        top: r.bottom + gap,
+        bottom: undefined,
+        maxHeight: Math.min(320, Math.max(spaceBelow, 72)),
+      });
+    } else {
+      setMenuPos({
+        left,
+        width: r.width,
+        top: undefined,
+        bottom: vh - r.top + gap,
+        maxHeight: Math.min(320, Math.max(spaceAbove, 72)),
+      });
+    }
+  }, [placement]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -191,10 +230,14 @@ export function SearchableDropdown({
   const triggerMuted = !value;
 
   const layoutRow =
-    "flex w-full min-h-[48px] items-center justify-between gap-2 text-left text-[15px] outline-none transition disabled:cursor-not-allowed disabled:opacity-50";
+    size === "sm"
+      ? "flex w-full min-h-9 items-center justify-between gap-1.5 text-left text-sm outline-none transition disabled:cursor-not-allowed disabled:opacity-50"
+      : "flex w-full min-h-[48px] items-center justify-between gap-2 text-left text-[15px] outline-none transition disabled:cursor-not-allowed disabled:opacity-50";
 
   const defaultVisual =
-    "rounded-xl border border-white/10 px-3.5 py-3 shadow-inner hover:border-white/15 focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/15";
+    size === "sm"
+      ? "rounded-lg border border-white/10 px-2.5 py-2 shadow-inner hover:border-white/15 focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/15"
+      : "rounded-xl border border-white/10 px-3.5 py-3 shadow-inner hover:border-white/15 focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/15";
 
   const triggerCn = [layoutRow, triggerClassName ?? defaultVisual].filter(Boolean).join(" ");
 
@@ -225,7 +268,7 @@ export function SearchableDropdown({
           {triggerText}
         </span>
         <svg
-          className={`h-5 w-5 shrink-0 text-zinc-500 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`${size === "sm" ? "h-4 w-4" : "h-5 w-5"} shrink-0 text-zinc-500 transition-transform ${open ? "rotate-180" : ""}`}
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -242,19 +285,19 @@ export function SearchableDropdown({
               ref={panelRef}
               id={panelId}
               role="presentation"
-              className="fixed flex flex-col overflow-hidden rounded-xl border border-zinc-600/90 bg-[#1c1f28] shadow-2xl ring-1 ring-black/40"
+              className={`fixed flex flex-col overflow-hidden border border-zinc-600/90 bg-[#1c1f28] shadow-2xl ring-1 ring-black/40 ${size === "sm" ? "rounded-lg" : "rounded-xl"}`}
               style={{
                 left: menuPos.left,
                 width: menuPos.width,
-                bottom: menuPos.bottom,
-                top: "auto",
+                top: menuPos.top !== undefined ? menuPos.top : "auto",
+                bottom: menuPos.bottom !== undefined ? menuPos.bottom : "auto",
                 maxWidth: "min(100vw - 1rem, 24rem)",
                 maxHeight: menuPos.maxHeight,
                 zIndex: menuZIndex,
               }}
             >
               {showSearch ? (
-                <div className="flex shrink-0 items-center gap-2 border-b border-zinc-700/80 p-2">
+                <div className={`flex shrink-0 items-center gap-2 border-b border-zinc-700/80 ${size === "sm" ? "p-1.5" : "p-2"}`}>
                   <input
                     ref={searchRef}
                     type="search"
@@ -263,7 +306,7 @@ export function SearchableDropdown({
                     placeholder={searchPlaceholder}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#16181f] px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/30"
+                    className={`min-w-0 flex-1 rounded-lg border border-white/10 bg-[#16181f] text-white outline-none placeholder:text-zinc-500 focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/30 ${size === "sm" ? "px-2 py-1.5 text-xs" : "px-3 py-2 text-sm"}`}
                   />
                   {allowClear && value ? (
                     <button
@@ -290,7 +333,7 @@ export function SearchableDropdown({
                     <li key={o.value} role="option" aria-selected={value === o.value}>
                       <button
                         type="button"
-                        className={`flex min-h-[2.75rem] w-full items-center px-3 text-left text-sm transition hover:bg-white/10 ${
+                        className={`flex ${size === "sm" ? "min-h-9 py-1.5 text-sm" : "min-h-[2.75rem] text-sm"} w-full items-center px-3 text-left transition hover:bg-white/10 ${
                           value === o.value ? "bg-amber-500/15 font-medium text-amber-100" : "text-zinc-100"
                         }`}
                         onClick={() => pick(o.value)}

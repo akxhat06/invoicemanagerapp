@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import {
+  buildCommissionReportPdf,
+  type CommissionReportCompanySection,
+  type CommissionReportRetailerSection,
+} from "@/lib/commission-report-pdf";
+import { SearchableDropdown, type SearchableDropdownOption } from "@/components/ui/searchable-dropdown";
 import { createClient } from "@/lib/supabase/client";
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
+import type { CompanyRow } from "@/types/company";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -26,281 +31,277 @@ function toNum(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function formatInrPdf(n: number) {
-  return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(
-    Number.isFinite(n) ? n : 0
-  );
-}
-
 function fmtDate(iso: string | null | undefined) {
   if (!iso) return "-";
   const d = new Date(iso);
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(-2)}`;
 }
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
-type CommissionWithInvoice = {
-  id: string;
-  invoice_id: string;
-  invoice_number: string;
-  retailer_name: string;
-  basic_amount: number;
-  gst_amount: number;
-  commission_percent: number;
-  commission_amount: number;
-  created_at: string;
-  retailer_invoices: {
-    bill_date: string;
-    total_amount: number;
-    payment_received: number;
-    outstanding_amount: number;
-    invoice_goods_returns: { amount: number }[];
-  } | null;
-};
-
-type PartyGroup = {
-  partyName: string;
-  rows: {
-    sr: number;
-    invoiceNo: string;
-    date: string;
-    billAmt: number;
-    basicAmt: number;
-    gstAmt: number;
-    rcvdAmt: number;
-    grAmt: number;
-    outstanding: number;
-    commPct: number;
-    commAmt: number;
-  }[];
-  totals: {
-    billAmt: number;
-    rcvdAmt: number;
-    grAmt: number;
-    outstanding: number;
-    commAmt: number;
-  };
-};
-
-// ── PDF Generation ───────────────────────────────────────────────────────────
-
-// Color palette (light professional theme)
-const C = {
-  navy:      [15,  40,  80]  as [number,number,number],
-  navyLight: [30,  60, 120]  as [number,number,number],
-  partyBg:   [232, 240, 255] as [number,number,number],
-  partyText: [15,  40,  80]  as [number,number,number],
-  totalBg:   [215, 228, 250] as [number,number,number],
-  grandBg:   [15,  40,  80]  as [number,number,number],
-  grandText: [255, 255, 255] as [number,number,number],
-  white:     [255, 255, 255] as [number,number,number],
-  text:      [30,  30,  30]  as [number,number,number],
-  muted:     [100, 100, 100] as [number,number,number],
-  border:    [190, 200, 220] as [number,number,number],
-  stripe:    [247, 249, 255] as [number,number,number],
-};
-
-// 9 columns
-const COL_WIDTHS = [8, 26, 20, 22, 22, 20, 16, 22, 22]; // mm, total ≈ 178mm + margins
-
-async function buildPDF(
-  firmName: string,
-  dateLabel: string,
-  parties: PartyGroup[],
-  grandTotals: { billAmt: number; rcvdAmt: number; grAmt: number; outstanding: number; commAmt: number },
-  generatedByLabel: string | null
+function fmtPeriodLabel(
+  fromMonth: number,
+  fromYear: number,
+  toMonth: number,
+  toYear: number
 ) {
-  const { default: jsPDF } = await import("jspdf");
-  const { default: autoTable } = await import("jspdf-autotable");
-
-  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-  const today = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
-
-  const headerBandH = generatedByLabel ? 24 : 20;
-  /** Top margin for autoTable so body clears the navy header band */
-  const tableTopMargin = headerBandH + 6;
-
-  let startY = 0;
-
-  // ── Per-page header ──────────────────────────────────────────────────────
-  const drawPageHeader = () => {
-    // Background band (taller when showing account line)
-    doc.setFillColor(...C.navy);
-    doc.rect(0, 0, pageW, headerBandH, "F");
-
-    // Firm name
-    doc.setTextColor(...C.grandText);
-    doc.setFontSize(13);
-    doc.setFont("helvetica", "bold");
-    doc.text(firmName.toUpperCase(), pageW / 2, 8, { align: "center" });
-
-    // Subtitle
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Agent Commission on Receipt Report  |  ${dateLabel}`, pageW / 2, 14, { align: "center" });
-
-    // Printed date + account (right)
-    doc.setTextColor(180, 200, 240);
-    doc.setFontSize(7.5);
-    doc.text(`Printed: ${today}`, pageW - 10, 14, { align: "right" });
-    if (generatedByLabel) {
-      doc.setFontSize(6.8);
-      doc.text(`Signed in: ${generatedByLabel}`, pageW - 10, 19, { align: "right" });
-    }
-
-    startY = headerBandH + 4;
-  };
-
-  drawPageHeader();
-
-  // ── Column headers ────────────────────────────────────────────────────────
-  const HEAD_COLS = [
-    "Sr", "Invoice No", "Date", "Bill Amt", "Rcvd. Amt", "GR Amt", "Outstanding", "Comm %", "Comm Amt",
-  ];
-
-  const colStyles: Record<number, object> = {
-    0: { halign: "center", cellWidth: COL_WIDTHS[0] },
-    1: { halign: "left",   cellWidth: COL_WIDTHS[1] },
-    2: { halign: "center", cellWidth: COL_WIDTHS[2] },
-    3: { halign: "right",  cellWidth: COL_WIDTHS[3] },
-    4: { halign: "right",  cellWidth: COL_WIDTHS[4] },
-    5: { halign: "right",  cellWidth: COL_WIDTHS[5] },
-    6: { halign: "right",  cellWidth: COL_WIDTHS[6] },
-    7: { halign: "center", cellWidth: COL_WIDTHS[7] },
-    8: { halign: "right",  cellWidth: COL_WIDTHS[8] },
-  };
-
-  let globalSr = 0;
-
-  for (const party of parties) {
-    // ── Party label row ───────────────────────────────────────────────────
-    const partyRow = [
-      {
-        content: `Party:  ${party.partyName}`,
-        colSpan: HEAD_COLS.length,
-        styles: {
-          fillColor: C.partyBg,
-          textColor: C.partyText,
-          fontStyle: "bold" as const,
-          fontSize: 8.5,
-          cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 4 },
-        },
-      },
-    ];
-
-    // ── Data rows ─────────────────────────────────────────────────────────
-    const dataRows = party.rows.map((r, idx) => {
-      globalSr++;
-      const fill = idx % 2 === 0 ? C.white : C.stripe;
-      const mkCell = (content: string, halign: "left"|"center"|"right") => ({
-        content,
-        styles: { halign, fillColor: fill, textColor: C.text },
-      });
-      return [
-        { content: String(globalSr), styles: { halign: "center" as const, fillColor: fill, textColor: C.muted } },
-        mkCell(r.invoiceNo, "left"),
-        mkCell(r.date, "center"),
-        mkCell(formatInrPdf(r.billAmt), "right"),
-        mkCell(formatInrPdf(r.rcvdAmt), "right"),
-        mkCell(r.grAmt > 0 ? formatInrPdf(r.grAmt) : "-", "right"),
-        mkCell(formatInrPdf(r.outstanding), "right"),
-        mkCell(`${r.commPct}%`, "center"),
-        { content: formatInrPdf(r.commAmt), styles: { halign: "right" as const, fontStyle: "bold" as const, fillColor: fill, textColor: C.navyLight } },
-      ];
-    });
-
-    // ── Party total row ───────────────────────────────────────────────────
-    const mkTotal = (v: string) => ({
-      content: v,
-      styles: { halign: "right" as const, fontStyle: "bold" as const, fillColor: C.totalBg, textColor: C.partyText },
-    });
-    const partyTotalRow = [
-      { content: "Party Total", colSpan: 3, styles: { halign: "right" as const, fontStyle: "bold" as const, fillColor: C.totalBg, textColor: C.partyText, fontSize: 8 } },
-      mkTotal(formatInrPdf(party.totals.billAmt)),
-      mkTotal(formatInrPdf(party.totals.rcvdAmt)),
-      mkTotal(party.totals.grAmt > 0 ? formatInrPdf(party.totals.grAmt) : "-"),
-      mkTotal(formatInrPdf(party.totals.outstanding)),
-      { content: "", styles: { fillColor: C.totalBg } },
-      mkTotal(formatInrPdf(party.totals.commAmt)),
-    ];
-
-    autoTable(doc, {
-      startY,
-      head: [HEAD_COLS],
-      body: [partyRow, ...dataRows, partyTotalRow],
-      theme: "plain",
-      tableWidth: "wrap",
-      columnStyles: colStyles,
-      styles: {
-        fontSize: 7.5,
-        cellPadding: { top: 1.8, bottom: 1.8, left: 2, right: 2 },
-        textColor: C.text,
-        fillColor: C.white,
-        lineColor: C.border,
-        lineWidth: 0.15,
-        font: "helvetica",
-      },
-      headStyles: {
-        fillColor: C.navyLight,
-        textColor: C.white,
-        fontStyle: "bold",
-        fontSize: 8,
-        halign: "center",
-        cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
-        lineColor: C.navy,
-        lineWidth: 0.2,
-      },
-      margin: { left: 10, right: 10, top: tableTopMargin },
-      didDrawPage: () => {
-        drawPageHeader();
-      },
-    });
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    startY = (doc as any).lastAutoTable.finalY + 5;
-  }
-
-  // ── Grand Total ────────────────────────────────────────────────────────────
-  const mkGrand = (v: string) => ({
-    content: v,
-    styles: { halign: "right" as const, fontStyle: "bold" as const, fillColor: C.grandBg, textColor: C.grandText, fontSize: 9 },
-  });
-
-  autoTable(doc, {
-    startY,
-    body: [[
-      { content: "GRAND TOTAL", colSpan: 3, styles: { halign: "right" as const, fontStyle: "bold" as const, fillColor: C.grandBg, textColor: C.grandText, fontSize: 9 } },
-      mkGrand(formatInrPdf(grandTotals.billAmt)),
-      mkGrand(formatInrPdf(grandTotals.rcvdAmt)),
-      mkGrand(grandTotals.grAmt > 0 ? formatInrPdf(grandTotals.grAmt) : "-"),
-      mkGrand(formatInrPdf(grandTotals.outstanding)),
-      { content: "", styles: { fillColor: C.grandBg } },
-      mkGrand(formatInrPdf(grandTotals.commAmt)),
-    ]],
-    theme: "plain",
-    tableWidth: "wrap",
-    columnStyles: colStyles,
-    styles: { lineColor: C.navy, lineWidth: 0.3, fillColor: C.grandBg },
-    margin: { left: 10, right: 10 },
-  });
-
-  // ── Page numbers ────────────────────────────────────────────────────────────
-  const pageCount = doc.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...C.muted);
-    doc.text(`Page ${i} of ${pageCount}`, pageW / 2, pageH - 5, { align: "center" });
-  }
-
-  return doc;
+  const fromLabel = `01/${String(fromMonth + 1).padStart(2, "0")}/${String(fromYear).slice(-2)}`;
+  const toLabel = `${String(new Date(toYear, toMonth + 1, 0).getDate()).padStart(2, "0")}/${String(toMonth + 1).padStart(2, "0")}/${String(toYear).slice(-2)}`;
+  return `${fromLabel} – ${toLabel}`;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+type InvNested = {
+  id: string;
+  bill_date: string;
+  company_id: string;
+  retailer_name: string | null;
+  total_amount: number;
+  payment_received: number;
+  outstanding_amount: number;
+  invoice_goods_returns: { id: string; amount: number; return_date: string; note: string | null }[] | null;
+  invoice_payments: {
+    payment_date: string;
+    method: string;
+    amount: number;
+    cheque_no: string | null;
+    upi_no: string | null;
+    upi_ref_no: string | null;
+    neft_utr_no: string | null;
+    note: string | null;
+  }[] | null;
+};
+
+type CommissionNested = {
+  id: string;
+  commission_percent: number;
+  commission_amount: number;
+  retailer_id: string;
+  retailer_name: string;
+};
+
+/** Invoice row from DB with nested payments, returns, and optional commission line(s). */
+type InvoiceForReport = {
+  id: string;
+  bill_date: string;
+  company_id: string;
+  retailer_id: string | null;
+  retailer_name: string | null;
+  invoice_number: string;
+  total_amount: number;
+  payment_received: number;
+  outstanding_amount: number;
+  invoice_goods_returns: InvNested["invoice_goods_returns"];
+  invoice_payments: InvNested["invoice_payments"];
+  commissions: CommissionNested | CommissionNested[] | null;
+};
+
+function pickCommNested(raw: InvoiceForReport["commissions"]): CommissionNested[] {
+  if (raw == null) return [];
+  return Array.isArray(raw) ? raw : [raw];
+}
+
+function aggregateCommission(raw: InvoiceForReport["commissions"]): { pct: number; amt: number } {
+  const rows = pickCommNested(raw);
+  if (rows.length === 0) return { pct: 0, amt: 0 };
+  const amt = rows.reduce((s, r) => s + toNum(r.commission_amount), 0);
+  const pct = toNum(rows[0]!.commission_percent);
+  return { pct, amt };
+}
+
+function invoiceRetailerDisplayName(inv: InvoiceForReport): string {
+  const fromInv = inv.retailer_name?.trim();
+  const rows = pickCommNested(inv.commissions);
+  const fromComm = rows[0]?.retailer_name?.trim();
+  return fromInv || fromComm || "Unknown";
+}
+
+function paymentRef(p: {
+  cheque_no?: string | null;
+  upi_no?: string | null;
+  upi_ref_no?: string | null;
+  neft_utr_no?: string | null;
+  note?: string | null;
+}): string {
+  const s = (x: string | null | undefined) => (x?.trim() ? x.trim() : "");
+  return s(p.neft_utr_no) || s(p.upi_ref_no) || s(p.upi_no) || s(p.cheque_no) || s(p.note) || "—";
+}
+
+/**
+ * Build PDF sections from bills in range (not from commissions alone), so every retailer
+ * with an invoice appears even when no commission row exists yet.
+ */
+function buildSectionsFromInvoices(
+  invoices: InvoiceForReport[],
+  periodLabel: string,
+  companyFilter: "all" | string,
+  companiesById: Map<string, Pick<CompanyRow, "id" | "name" | "gst_no">>
+): CommissionReportCompanySection[] {
+  const byCompany = new Map<string, InvoiceForReport[]>();
+  for (const inv of invoices) {
+    const cid = inv.company_id;
+    if (companyFilter !== "all" && cid !== companyFilter) continue;
+    if (!byCompany.has(cid)) byCompany.set(cid, []);
+    byCompany.get(cid)!.push(inv);
+  }
+
+  const companyIds = [...byCompany.keys()].sort((a, b) => {
+    const na = companiesById.get(a)?.name ?? a;
+    const nb = companiesById.get(b)?.name ?? b;
+    return na.localeCompare(nb);
+  });
+
+  const sections: CommissionReportCompanySection[] = [];
+
+  for (const companyId of companyIds) {
+    const list = byCompany.get(companyId)!;
+
+    const dbCo = companiesById.get(companyId);
+    const companyName = dbCo?.name?.trim() || "Company";
+    const gstNo = dbCo?.gst_no ?? null;
+
+    const byRetailerId = new Map<string, InvoiceForReport[]>();
+    for (const inv of list) {
+      const rid = inv.retailer_id?.trim();
+      const key = rid || `invoice:${inv.id}`;
+      if (!byRetailerId.has(key)) byRetailerId.set(key, []);
+      byRetailerId.get(key)!.push(inv);
+    }
+
+    const retailerKeys = [...byRetailerId.keys()].sort((a, b) => {
+      const na = invoiceRetailerDisplayName(byRetailerId.get(a)![0]!);
+      const nb = invoiceRetailerDisplayName(byRetailerId.get(b)![0]!);
+      const cmp = na.localeCompare(nb);
+      return cmp !== 0 ? cmp : a.localeCompare(b);
+    });
+
+    const retailers: CommissionReportRetailerSection[] = [];
+
+    for (const rkey of retailerKeys) {
+      const rlist = byRetailerId.get(rkey)!;
+      const rname = invoiceRetailerDisplayName(rlist[0]!);
+      rlist.sort((a, b) => a.bill_date.localeCompare(b.bill_date));
+
+      const invoiceRows: CommissionReportRetailerSection["rows"] = [];
+      const totals = { billAmt: 0, rcvdAmt: 0, grAmt: 0, outstanding: 0, commAmt: 0 };
+      let sr = 0;
+
+      const paymentList: { date: string; mode: string; amount: number; reference: string }[] = [];
+      const creditList: { cnNo: string; date: string; amount: number; reason: string }[] = [];
+
+      for (const inv of rlist) {
+        sr++;
+        const billAmt = toNum(inv.total_amount);
+        const rcvdAmt = toNum(inv.payment_received);
+        const outstanding = toNum(inv.outstanding_amount);
+        const grAmt = (inv.invoice_goods_returns ?? []).reduce((s, g) => s + toNum(g.amount), 0);
+        const { pct: commPct, amt: commAmt } = aggregateCommission(inv.commissions);
+
+        invoiceRows.push({
+          sr,
+          invoiceNo: inv.invoice_number,
+          date: fmtDate(inv.bill_date),
+          billAmt,
+          rcvdAmt,
+          grAmt,
+          outstanding,
+          commPct,
+          commAmt,
+        });
+
+        totals.billAmt += billAmt;
+        totals.rcvdAmt += rcvdAmt;
+        totals.grAmt += grAmt;
+        totals.outstanding += outstanding;
+        totals.commAmt += commAmt;
+
+        for (const p of inv.invoice_payments ?? []) {
+          paymentList.push({
+            date: fmtDate(p.payment_date),
+            mode: p.method,
+            amount: toNum(p.amount),
+            reference: paymentRef(p),
+          });
+        }
+
+        for (const g of inv.invoice_goods_returns ?? []) {
+          creditList.push({
+            cnNo: g.note?.trim() || `GR-${g.id.slice(0, 8)}`,
+            date: fmtDate(g.return_date),
+            amount: toNum(g.amount),
+            reason: g.note?.trim() || "Goods return",
+          });
+        }
+      }
+
+      paymentList.sort((a, b) => a.date.localeCompare(b.date));
+      creditList.sort((a, b) => a.date.localeCompare(b.date));
+
+      retailers.push({
+        retailerName: rname,
+        rows: invoiceRows,
+        totals,
+        payments: paymentList,
+        creditNotes: creditList,
+      });
+    }
+
+    sections.push({
+      companyId,
+      companyName,
+      gstNo,
+      periodLabel,
+      retailers,
+    });
+  }
+
+  return sections;
+}
+
+const REPORT_PAGE_SIZE = 1000;
+
+async function fetchInvoicesForReport(
+  supabase: ReturnType<typeof createClient>,
+  fromDate: string,
+  toDate: string,
+  companyFilter: "all" | string
+): Promise<InvoiceForReport[]> {
+  const out: InvoiceForReport[] = [];
+  for (let offset = 0; ; offset += REPORT_PAGE_SIZE) {
+    let q = supabase
+      .from("retailer_invoices")
+      .select(
+        `
+          id,
+          bill_date,
+          company_id,
+          retailer_id,
+          retailer_name,
+          invoice_number,
+          total_amount,
+          payment_received,
+          outstanding_amount,
+          invoice_goods_returns ( id, amount, return_date, note ),
+          invoice_payments ( payment_date, method, amount, cheque_no, upi_no, upi_ref_no, neft_utr_no, note ),
+          commissions ( id, commission_percent, commission_amount, retailer_id, retailer_name )
+        `
+      )
+      .gte("bill_date", fromDate)
+      .lte("bill_date", toDate)
+      .order("company_id", { ascending: true })
+      .order("retailer_name", { ascending: true })
+      .order("bill_date", { ascending: true })
+      .range(offset, offset + REPORT_PAGE_SIZE - 1);
+
+    if (companyFilter !== "all") {
+      q = q.eq("company_id", companyFilter);
+    }
+
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as unknown as InvoiceForReport[];
+    out.push(...batch);
+    if (batch.length < REPORT_PAGE_SIZE) break;
+  }
+  return out;
+}
 
 function FileTextIcon({ className }: { className?: string }) {
   return (
@@ -319,8 +320,8 @@ function XIcon({ className }: { className?: string }) {
   );
 }
 
-const selectCls =
-  "bg-zinc-900 text-zinc-200 rounded-lg border border-zinc-700/80 px-3 py-2.5 text-sm outline-none focus:border-violet-500/60 appearance-none cursor-pointer";
+const reportDropdownTriggerCls =
+  "w-full rounded-md border border-zinc-700/80 bg-zinc-900 px-2.5 py-1.5 text-left text-xs outline-none transition focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50";
 
 export function GenerateReportButton() {
   const [open, setOpen] = useState(false);
@@ -330,32 +331,75 @@ export function GenerateReportButton() {
   const [fromYear, setFromYear] = useState(now.getFullYear());
   const [toMonth, setToMonth] = useState(now.getMonth());
   const [toYear, setToYear] = useState(now.getFullYear());
+  const [companyFilter, setCompanyFilter] = useState<"all" | string>("all");
+  const [companies, setCompanies] = useState<Pick<CompanyRow, "id" | "name" | "gst_no">[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  async function handleGenerate() {
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      setLoadingCompanies(true);
+      try {
+        const supabase = createClient();
+        const { data, error: e } = await supabase.from("companies").select("id,name,gst_no").order("name");
+        if (e) throw e;
+        if (!cancelled) setCompanies((data ?? []) as Pick<CompanyRow, "id" | "name" | "gst_no">[]);
+      } catch {
+        if (!cancelled) setCompanies([]);
+      } finally {
+        if (!cancelled) setLoadingCompanies(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const closePreview = useCallback(() => {
+    setPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }, []);
+
+  const monthOptions = useMemo<SearchableDropdownOption[]>(
+    () => MONTHS.map((m, i) => ({ value: String(i), label: m })),
+    []
+  );
+
+  const yearOptions = useMemo<SearchableDropdownOption[]>(
+    () => yearRange().map((y) => ({ value: String(y), label: String(y) })),
+    []
+  );
+
+  const companyOptions = useMemo<SearchableDropdownOption[]>(() => {
+    const base: SearchableDropdownOption[] = [{ value: "all", label: "All companies" }];
+    return base.concat(companies.map((c) => ({ value: c.id, label: c.name })));
+  }, [companies]);
+
+  async function runReport(mode: "view" | "download") {
     setError(null);
     setLoading(true);
 
     try {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Fetch profile for firm name
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("username")
-        .eq("id", user.id)
-        .single();
+      const { data: profile } = await supabase.from("profiles").select("username").eq("id", user.id).single();
 
-      const firmName: string =
-        (profile as { username?: string } | null)?.username ??
-        user.user_metadata?.["full_name"] ??
-        user.email ??
-        "Commission Report";
-
-      // Build date range
       const fromDate = new Date(fromYear, fromMonth, 1).toISOString().slice(0, 10);
       const toDate = new Date(toYear, toMonth + 1, 0).toISOString().slice(0, 10);
 
@@ -365,105 +409,28 @@ export function GenerateReportButton() {
         return;
       }
 
-      // Fetch commissions with nested invoice + goods returns
-      const { data: commissions, error: fetchErr } = await supabase
-        .from("commissions")
-        .select(`
-          id,
-          invoice_id,
-          invoice_number,
-          retailer_name,
-          basic_amount,
-          gst_amount,
-          commission_percent,
-          commission_amount,
-          created_at,
-          retailer_invoices (
-            bill_date,
-            total_amount,
-            payment_received,
-            outstanding_amount,
-            invoice_goods_returns ( amount )
-          )
-        `)
-        .order("retailer_name");
+      const invoices = await fetchInvoicesForReport(supabase, fromDate, toDate, companyFilter);
 
-      if (fetchErr) throw new Error(fetchErr.message);
-
-      // Filter by invoice bill_date in range
-      const filtered = ((commissions ?? []) as unknown as CommissionWithInvoice[]).filter((c) => {
-        const inv = Array.isArray(c.retailer_invoices) ? c.retailer_invoices[0] : c.retailer_invoices;
-        const bd = inv?.bill_date;
-        if (!bd) return false;
-        return bd >= fromDate && bd <= toDate;
-      });
-
-      if (filtered.length === 0) {
-        setError("No commission records found for the selected period.");
+      if (invoices.length === 0) {
+        setError(
+          companyFilter === "all"
+            ? "No bills in the selected date range."
+            : "No bills for this company in the selected date range."
+        );
         setLoading(false);
         return;
       }
 
-      // Group by retailer_name
-      const partyMap = new Map<string, PartyGroup>();
-      let srCounter = 0;
+      const companiesById = new Map(companies.map((c) => [c.id, c]));
+      const periodLabel = fmtPeriodLabel(fromMonth, fromYear, toMonth, toYear);
 
-      for (const c of filtered) {
-        const party = c.retailer_name || "Unknown";
-        if (!partyMap.has(party)) {
-          partyMap.set(party, {
-            partyName: party,
-            rows: [],
-            totals: { billAmt: 0, rcvdAmt: 0, grAmt: 0, outstanding: 0, commAmt: 0 },
-          });
-        }
-        const group = partyMap.get(party)!;
+      const sections = buildSectionsFromInvoices(invoices, periodLabel, companyFilter, companiesById);
 
-        const inv = Array.isArray(c.retailer_invoices) ? c.retailer_invoices[0] : c.retailer_invoices;
-        const billAmt = toNum(inv?.total_amount);
-        const rcvdAmt = toNum(inv?.payment_received);
-        const outstanding = toNum(inv?.outstanding_amount);
-        const grAmt = (inv?.invoice_goods_returns ?? []).reduce((s: number, r: { amount?: unknown }) => s + toNum(r.amount), 0);
-        const commAmt = toNum(c.commission_amount);
-
-        srCounter++;
-        group.rows.push({
-          sr: srCounter,
-          invoiceNo: c.invoice_number,
-          date: fmtDate(inv?.bill_date),
-          billAmt,
-          basicAmt: toNum(c.basic_amount),
-          gstAmt: toNum(c.gst_amount),
-          rcvdAmt,
-          grAmt,
-          outstanding,
-          commPct: toNum(c.commission_percent),
-          commAmt,
-        });
-
-        group.totals.billAmt += billAmt;
-        group.totals.rcvdAmt += rcvdAmt;
-        group.totals.grAmt += grAmt;
-        group.totals.outstanding += outstanding;
-        group.totals.commAmt += commAmt;
+      if (sections.length === 0) {
+        setError("No data for the selected company in this period.");
+        setLoading(false);
+        return;
       }
-
-      const parties = Array.from(partyMap.values());
-
-      const grandTotals = parties.reduce(
-        (acc, p) => ({
-          billAmt: acc.billAmt + p.totals.billAmt,
-          rcvdAmt: acc.rcvdAmt + p.totals.rcvdAmt,
-          grAmt: acc.grAmt + p.totals.grAmt,
-          outstanding: acc.outstanding + p.totals.outstanding,
-          commAmt: acc.commAmt + p.totals.commAmt,
-        }),
-        { billAmt: 0, rcvdAmt: 0, grAmt: 0, outstanding: 0, commAmt: 0 }
-      );
-
-      const fromLabel = `01/${String(fromMonth + 1).padStart(2, "0")}/${String(fromYear).slice(-2)}`;
-      const toLabel = `${String(new Date(toYear, toMonth + 1, 0).getDate()).padStart(2, "0")}/${String(toMonth + 1).padStart(2, "0")}/${String(toYear).slice(-2)}`;
-      const dateLabel = `From ${fromLabel} To ${toLabel}`;
 
       const loginLabel =
         user.email?.trim() ||
@@ -471,12 +438,30 @@ export function GenerateReportButton() {
         (profile as { username?: string } | null)?.username?.trim() ||
         null;
 
-      const doc = await buildPDF(firmName, dateLabel, parties, grandTotals, loginLabel);
+      const printedLabel = new Date().toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
 
-      const fileName = `Commission_Report_${MONTHS[fromMonth].slice(0, 3)}${fromYear}_to_${MONTHS[toMonth].slice(0, 3)}${toYear}.pdf`;
-      doc.save(fileName);
+      const doc = buildCommissionReportPdf(sections, {
+        printedLabel,
+        signedInLabel: loginLabel,
+      });
 
-      setOpen(false);
+      if (mode === "view") {
+        const blob = doc.output("blob");
+        const url = URL.createObjectURL(blob);
+        setPreviewUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
+        setOpen(false);
+      } else {
+        const fileName = `Commission_Report_${MONTHS[fromMonth].slice(0, 3)}${fromYear}_to_${MONTHS[toMonth].slice(0, 3)}${toYear}.pdf`;
+        doc.save(fileName);
+        setOpen(false);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate report");
     } finally {
@@ -486,139 +471,227 @@ export function GenerateReportButton() {
 
   return (
     <>
-      {/* Trigger button */}
       <button
-        onClick={() => { setOpen(true); setError(null); }}
+        onClick={() => {
+          setOpen(true);
+          setError(null);
+        }}
         title="Generate Commission Report"
-        className="flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-indigo-300 ring-1 ring-inset ring-indigo-500/10 transition hover:border-indigo-400/50 hover:bg-indigo-500/15 hover:text-indigo-200 active:scale-95"
+        className="flex items-center gap-1 rounded-md border border-indigo-500/30 bg-indigo-500/10 px-2 py-1 text-[10px] font-semibold text-indigo-300 ring-1 ring-inset ring-indigo-500/10 transition hover:border-indigo-400/50 hover:bg-indigo-500/15 hover:text-indigo-200 active:scale-95"
       >
-        <FileTextIcon className="h-3.5 w-3.5 shrink-0" />
+        <FileTextIcon className="h-3 w-3 shrink-0" />
         Report
       </button>
 
-      {/* Modal backdrop */}
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => { if (!loading) setOpen(false); }}
+            onClick={() => {
+              if (!loading) setOpen(false);
+            }}
           />
 
-          {/* Modal card */}
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-zinc-700/80 bg-zinc-950 shadow-2xl ring-1 ring-white/[0.06]">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-zinc-800/80 px-5 py-4">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400 ring-1 ring-indigo-500/20">
-                  <FileTextIcon className="h-4 w-4" />
+          <div className="relative z-10 w-full max-w-[min(100%,17.5rem)] rounded-xl border border-zinc-700/80 bg-zinc-950 shadow-2xl ring-1 ring-white/[0.06] sm:max-w-[18.5rem]">
+            <div className="flex items-center justify-between border-b border-zinc-800/80 px-3 py-2.5">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-400 ring-1 ring-indigo-500/20">
+                  <FileTextIcon className="h-3.5 w-3.5" />
                 </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-white">Generate Commission Report</h2>
-                  <p className="text-[11px] text-zinc-500">PDF with party-wise commission details</p>
+                <div className="min-w-0">
+                  <h2 className="truncate text-xs font-semibold leading-tight text-white">Commission report</h2>
+                  <p className="truncate text-[10px] text-zinc-500">Party-wise PDF</p>
                 </div>
               </div>
               <button
-                onClick={() => { if (!loading) setOpen(false); }}
-                className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-zinc-800 hover:text-zinc-200"
+                onClick={() => {
+                  if (!loading) setOpen(false);
+                }}
+                className="shrink-0 rounded-md p-1 text-zinc-500 transition hover:bg-zinc-800 hover:text-zinc-200"
               >
-                <XIcon className="h-4 w-4" />
+                <XIcon className="h-3.5 w-3.5" />
               </button>
             </div>
 
-            {/* Body */}
-            <div className="space-y-5 p-5">
-              <p className="text-xs text-zinc-500">
-                Select the billing period. Only invoices with a bill date in this range will be included.
+            <div className="space-y-3 px-3 pb-3 pt-2.5">
+              <p className="text-[10px] leading-snug text-zinc-500">
+                Bill date in range. Pick company to filter.
               </p>
 
-              {/* From */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500">From Month</label>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <select
-                    value={fromMonth}
-                    onChange={(e) => setFromMonth(Number(e.target.value))}
-                    className={selectCls}
-                  >
-                    {MONTHS.map((m, i) => (
-                      <option key={m} value={i}>{m}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={fromYear}
-                    onChange={(e) => setFromYear(Number(e.target.value))}
-                    className={selectCls}
-                  >
-                    {yearRange().map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
+              <div className="space-y-1">
+                <label className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">Company</label>
+                <SearchableDropdown
+                  value={companyFilter}
+                  onChange={(v) => setCompanyFilter(v === "all" ? "all" : v)}
+                  options={companyOptions}
+                  placeholder="All companies"
+                  disabled={loadingCompanies}
+                  showSearch
+                  allowClear={false}
+                  size="sm"
+                  placement="below"
+                  listMaxHeight="calc(2.25rem * 4)"
+                  triggerClassName={reportDropdownTriggerCls}
+                  placeholderClassName="text-zinc-500"
+                  valueClassName="text-zinc-100"
+                  inputBackground="#18181b"
+                  menuZIndex={400}
+                  aria-label="Company for report"
+                />
+                {loadingCompanies ? (
+                  <p className="text-[10px] text-zinc-600">Loading companies…</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">From</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <SearchableDropdown
+                    value={String(fromMonth)}
+                    onChange={(v) => setFromMonth(Number(v))}
+                    options={monthOptions}
+                    showSearch={false}
+                    allowClear={false}
+                    size="sm"
+                    placement="below"
+                    listMaxHeight="calc(2.25rem * 5)"
+                    triggerClassName={reportDropdownTriggerCls}
+                    placeholderClassName="text-zinc-500"
+                    valueClassName="text-zinc-100"
+                    inputBackground="#18181b"
+                    menuZIndex={400}
+                    aria-label="From month"
+                  />
+                  <SearchableDropdown
+                    value={String(fromYear)}
+                    onChange={(v) => setFromYear(Number(v))}
+                    options={yearOptions}
+                    showSearch={false}
+                    allowClear={false}
+                    size="sm"
+                    placement="below"
+                    listMaxHeight="calc(2.25rem * 5)"
+                    triggerClassName={reportDropdownTriggerCls}
+                    placeholderClassName="text-zinc-500"
+                    valueClassName="text-zinc-100"
+                    inputBackground="#18181b"
+                    menuZIndex={400}
+                    aria-label="From year"
+                  />
                 </div>
               </div>
 
-              {/* To */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500">To Month</label>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <select
-                    value={toMonth}
-                    onChange={(e) => setToMonth(Number(e.target.value))}
-                    className={selectCls}
-                  >
-                    {MONTHS.map((m, i) => (
-                      <option key={m} value={i}>{m}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={toYear}
-                    onChange={(e) => setToYear(Number(e.target.value))}
-                    className={selectCls}
-                  >
-                    {yearRange().map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
+              <div className="space-y-1">
+                <label className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">To</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <SearchableDropdown
+                    value={String(toMonth)}
+                    onChange={(v) => setToMonth(Number(v))}
+                    options={monthOptions}
+                    showSearch={false}
+                    allowClear={false}
+                    size="sm"
+                    placement="below"
+                    listMaxHeight="calc(2.25rem * 5)"
+                    triggerClassName={reportDropdownTriggerCls}
+                    placeholderClassName="text-zinc-500"
+                    valueClassName="text-zinc-100"
+                    inputBackground="#18181b"
+                    menuZIndex={400}
+                    aria-label="To month"
+                  />
+                  <SearchableDropdown
+                    value={String(toYear)}
+                    onChange={(v) => setToYear(Number(v))}
+                    options={yearOptions}
+                    showSearch={false}
+                    allowClear={false}
+                    size="sm"
+                    placement="below"
+                    listMaxHeight="calc(2.25rem * 5)"
+                    triggerClassName={reportDropdownTriggerCls}
+                    placeholderClassName="text-zinc-500"
+                    valueClassName="text-zinc-100"
+                    inputBackground="#18181b"
+                    menuZIndex={400}
+                    aria-label="To year"
+                  />
                 </div>
               </div>
 
-              {/* Error */}
               {error && (
-                <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                <p className="rounded-md border border-red-500/20 bg-red-500/10 px-2 py-1.5 text-[10px] leading-snug text-red-400">
                   {error}
                 </p>
               )}
             </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-end gap-3 border-t border-zinc-800/80 px-5 py-4">
-              <button
-                onClick={() => setOpen(false)}
-                disabled={loading}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleGenerate}
-                disabled={loading}
-                className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-500 disabled:opacity-60 active:scale-95"
-              >
-                {loading ? (
-                  <>
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
-                      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" strokeLinecap="round" />
-                    </svg>
-                    Generating…
-                  </>
-                ) : (
-                  <>
-                    <FileTextIcon className="h-4 w-4" />
-                    Download PDF
-                  </>
-                )}
-              </button>
+            <div className="border-t border-zinc-800/80 px-3 pb-3 pt-2.5">
+              <div className="flex flex-nowrap items-center justify-end gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  disabled={loading}
+                  className="shrink-0 rounded-md px-2 py-1.5 text-[11px] font-medium text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void runReport("view")}
+                  disabled={loading}
+                  className="inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-violet-500/35 bg-violet-950/60 px-2.5 py-1.5 text-[11px] font-semibold text-violet-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:border-violet-400/45 hover:bg-violet-900/50 disabled:cursor-wait disabled:opacity-100"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="h-3.5 w-3.5 shrink-0 animate-spin text-violet-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" strokeLinecap="round" />
+                      </svg>
+                      <span>Loading…</span>
+                    </>
+                  ) : (
+                    "View"
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void runReport("download")}
+                  disabled={loading}
+                  className="inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-md shadow-indigo-500/25 ring-1 ring-indigo-400/20 transition hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-100 active:scale-[0.99]"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="h-3.5 w-3.5 shrink-0 animate-spin text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" strokeLinecap="round" />
+                      </svg>
+                      <span>Loading…</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileTextIcon className="h-3.5 w-3.5 shrink-0" />
+                      Download
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {previewUrl && (
+        <div className="fixed inset-0 z-[70] flex flex-col bg-zinc-950">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-zinc-800 px-3 py-1.5">
+            <p className="truncate text-xs font-medium text-white">Preview</p>
+            <button
+              type="button"
+              onClick={closePreview}
+              className="rounded-md px-2 py-1 text-[11px] font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white"
+            >
+              Close
+            </button>
+          </div>
+          <iframe title="Commission report preview" src={previewUrl} className="min-h-0 flex-1 w-full border-0 bg-zinc-900" />
         </div>
       )}
     </>

@@ -15,7 +15,7 @@ function formatInr(n: number) {
   }).format(Number.isFinite(n) ? n : 0);
 }
 
-type DetailPanel = null | "companies" | "retailers" | "overall";
+type DetailPanel = null | "companies" | "retailers" | "overall" | "report";
 
 type Props = {
   username: string | undefined;
@@ -80,6 +80,99 @@ function BillingRowsTable({ rows }: { rows: BillingSummaryLine[] }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function OverviewFySummaryTables({
+  financialYearLabel,
+  billingGrand,
+  companyCount,
+  retailerCount,
+  transportCount,
+  paymentCount,
+  returnCount,
+  commissionCount,
+}: {
+  financialYearLabel: string;
+  billingGrand: BillingGrandTotals;
+  companyCount: number;
+  retailerCount: number;
+  transportCount: number;
+  paymentCount: number;
+  returnCount: number;
+  commissionCount: number;
+}) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-wider">
+          Invoice totals — {financialYearLabel} (non-draft)
+        </h3>
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[280px] text-sm">
+            <tbody>
+              {[
+                ["Invoices", String(billingGrand.invoiceCount)],
+                ["Total basic", formatInr(billingGrand.totalBasic)],
+                ["Total GST", formatInr(billingGrand.totalGst)],
+                ["Total invoice amount", formatInr(billingGrand.totalInvoiceAmount)],
+                ["Total transportation", formatInr(billingGrand.totalTransport)],
+                ["Total billed", formatInr(billingGrand.totalBilled)],
+                ["Paid (on invoices)", formatInr(billingGrand.totalPaid)],
+                ["Outstanding (on invoices)", formatInr(billingGrand.totalOutstanding)],
+              ].map(([k, v]) => (
+                <tr key={k} className="border-border/60 border-t first:border-t-0">
+                  <td className="text-muted-foreground px-3 py-2.5">{k}</td>
+                  <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-zinc-900 dark:text-white">
+                    {v}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h3 className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-wider">Profiles (all time)</h3>
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[280px] text-sm">
+            <tbody>
+              {[
+                ["Companies", companyCount],
+                ["Retailers", retailerCount],
+              ].map(([k, v]) => (
+                <tr key={k} className="border-border/60 border-t first:border-t-0">
+                  <td className="text-muted-foreground px-3 py-2.5">{k}</td>
+                  <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h3 className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-wider">
+          Module entries — {financialYearLabel}
+        </h3>
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[280px] text-sm">
+            <tbody>
+              {[
+                ["Transport entries", transportCount],
+                ["Payment entries", paymentCount],
+                ["Goods return entries", returnCount],
+                ["Commission entries", commissionCount],
+              ].map(([k, v]) => (
+                <tr key={k} className="border-border/60 border-t first:border-t-0">
+                  <td className="text-muted-foreground px-3 py-2.5">{k}</td>
+                  <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -218,7 +311,9 @@ export function DashboardOverview({
         ? `Retailers — ${financialYearLabel}`
         : detail === "overall"
           ? `Overall — ${financialYearLabel}`
-          : "";
+          : detail === "report"
+            ? `Report preview — ${financialYearLabel}`
+            : "";
 
   return (
     <>
@@ -231,7 +326,7 @@ export function DashboardOverview({
             onClick={closeDetail}
           />
           <div
-            className="border-border bg-card fixed left-1/2 top-1/2 z-[110] flex max-h-[min(88vh,640px)] w-[min(96vw,920px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl border shadow-2xl"
+            className="border-border bg-card fixed left-1/2 top-1/2 z-[110] flex max-h-[min(92vh,900px)] w-[min(96vw,920px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl border shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="billing-detail-title"
@@ -256,79 +351,47 @@ export function DashboardOverview({
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               {detail === "companies" && <BillingRowsTable rows={companyBillingTable} />}
               {detail === "retailers" && <BillingRowsTable rows={retailerBillingTable} />}
-              {detail === "overall" && (
-                <div className="space-y-6">
+              {detail === "report" && (
+                <div className="space-y-8">
+                  <p className="text-muted-foreground text-sm">
+                    Same scope as the Excel download: billing by invoice date for {financialYearLabel}. Use{" "}
+                    <span className="font-medium">Download</span> in the header to save the file.
+                  </p>
+                  <OverviewFySummaryTables
+                    financialYearLabel={financialYearLabel}
+                    billingGrand={billingGrand}
+                    companyCount={companyCount}
+                    retailerCount={retailerCount}
+                    transportCount={transportCount}
+                    paymentCount={paymentCount}
+                    returnCount={returnCount}
+                    commissionCount={commissionCount}
+                  />
                   <div>
-                    <h3 className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-wider">
-                      Invoice totals — {financialYearLabel} (non-draft)
+                    <h3 className="text-muted-foreground mb-3 text-xs font-semibold uppercase tracking-wider">
+                      By company
                     </h3>
-                    <div className="overflow-x-auto rounded-xl border border-border">
-                      <table className="w-full min-w-[280px] text-sm">
-                        <tbody>
-                          {[
-                            ["Invoices", String(billingGrand.invoiceCount)],
-                            ["Total basic", formatInr(billingGrand.totalBasic)],
-                            ["Total GST", formatInr(billingGrand.totalGst)],
-                            ["Total invoice amount", formatInr(billingGrand.totalInvoiceAmount)],
-                            ["Total transportation", formatInr(billingGrand.totalTransport)],
-                            ["Total billed", formatInr(billingGrand.totalBilled)],
-                            ["Paid (on invoices)", formatInr(billingGrand.totalPaid)],
-                            ["Outstanding (on invoices)", formatInr(billingGrand.totalOutstanding)],
-                          ].map(([k, v]) => (
-                            <tr key={k} className="border-border/60 border-t first:border-t-0">
-                              <td className="text-muted-foreground px-3 py-2.5">{k}</td>
-                              <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-zinc-900 dark:text-white">
-                                {v}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <BillingRowsTable rows={companyBillingTable} />
                   </div>
                   <div>
-                    <h3 className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-wider">
-                      Profiles (all time)
+                    <h3 className="text-muted-foreground mb-3 text-xs font-semibold uppercase tracking-wider">
+                      By retailer
                     </h3>
-                    <div className="overflow-x-auto rounded-xl border border-border">
-                      <table className="w-full min-w-[280px] text-sm">
-                        <tbody>
-                          {[
-                            ["Companies", companyCount],
-                            ["Retailers", retailerCount],
-                          ].map(([k, v]) => (
-                            <tr key={k} className="border-border/60 border-t first:border-t-0">
-                              <td className="text-muted-foreground px-3 py-2.5">{k}</td>
-                              <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{v}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-wider">
-                      Module entries — {financialYearLabel}
-                    </h3>
-                    <div className="overflow-x-auto rounded-xl border border-border">
-                      <table className="w-full min-w-[280px] text-sm">
-                        <tbody>
-                          {[
-                            ["Transport entries", transportCount],
-                            ["Payment entries", paymentCount],
-                            ["Goods return entries", returnCount],
-                            ["Commission entries", commissionCount],
-                          ].map(([k, v]) => (
-                            <tr key={k} className="border-border/60 border-t first:border-t-0">
-                              <td className="text-muted-foreground px-3 py-2.5">{k}</td>
-                              <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{v}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <BillingRowsTable rows={retailerBillingTable} />
                   </div>
                 </div>
+              )}
+              {detail === "overall" && (
+                <OverviewFySummaryTables
+                  financialYearLabel={financialYearLabel}
+                  billingGrand={billingGrand}
+                  companyCount={companyCount}
+                  retailerCount={retailerCount}
+                  transportCount={transportCount}
+                  paymentCount={paymentCount}
+                  returnCount={returnCount}
+                  commissionCount={commissionCount}
+                />
               )}
             </div>
           </div>
@@ -364,6 +427,13 @@ export function DashboardOverview({
               className="rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/20"
             >
               Overall
+            </button>
+            <button
+              type="button"
+              onClick={() => setDetail("report")}
+              className="rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/20"
+            >
+              View
             </button>
             <button
               type="button"
@@ -442,9 +512,10 @@ export function DashboardOverview({
         </div>
         <p className="text-muted-foreground mb-4 text-sm">
           Invoices are included by <span className="font-medium">invoice date</span> within FY {financialYearLabel} (1 Apr{" "}
-          {financialYearStartYear} – 31 Mar {financialYearStartYear + 1}). Drafts excluded. Transport / payments / returns /
+          {financialYearStartYear} – 31 Mar {financialYearStartYear + 1}).           Drafts excluded. Transport / payments / returns /
           commission counts match invoices in this FY. Tap <span className="font-medium">Companies</span> or{" "}
-          <span className="font-medium">Retailers</span> for the full table, or <span className="font-medium">Overall</span>.
+          <span className="font-medium">Retailers</span> for the full table, <span className="font-medium">View</span> for a
+          full report preview, or <span className="font-medium">Overall</span>.
         </p>
 
         {billingGrand.invoiceCount === 0 ? (
