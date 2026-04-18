@@ -2,7 +2,7 @@
 
 import { formatDisplayName } from "@/lib/display-name";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DashboardMobileNav } from "./dashboard-mobile-nav";
 import { DashboardProfileMenu } from "./dashboard-profile-menu";
 import { DashboardSidebar } from "./dashboard-sidebar";
@@ -24,9 +24,16 @@ function getHeaderTitle(pathname: string): string {
   if (pathname.startsWith("/invoices")) return "Invoices";
   if (pathname.startsWith("/payments")) return "Payments";
   if (pathname.startsWith("/credit-notes")) return "Credit Note";
+  if (pathname.startsWith("/commission")) return "Commission";
   if (pathname.startsWith("/profile")) return "Profile";
   return "Dashboard";
 }
+
+type Message = { id: number; role: "user" | "bot"; text: string };
+
+const INITIAL_MESSAGES: Message[] = [
+  { id: 0, role: "bot", text: "Hi! I'm your assistant. Ask me anything about your invoices, payments, or commissions." },
+];
 
 export function DashboardLayout({
   username,
@@ -38,6 +45,12 @@ export function DashboardLayout({
 }: Props) {
   const router = useRouter();
   const [tourVisible, setTourVisible] = useState(showWelcomeTour);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  const [input, setInput] = useState("");
+  const [typing, setTyping] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const title = getHeaderTitle(pathname);
   const isProfilePage = pathname.startsWith("/profile");
@@ -48,10 +61,31 @@ export function DashboardLayout({
 
   useEffect(() => {
     document.body.style.overflow = tourVisible ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
+    return () => { document.body.style.overflow = ""; };
   }, [tourVisible]);
+
+  useEffect(() => {
+    if (chatOpen) setTimeout(() => inputRef.current?.focus(), 300);
+  }, [chatOpen]);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, typing]);
+
+  function send(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setMessages((prev) => [...prev, { id: Date.now(), role: "user", text: trimmed }]);
+    setInput("");
+    setTyping(true);
+    setTimeout(() => {
+      setTyping(false);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now() + 1, role: "bot", text: "I received your message. Full AI integration coming soon!" },
+      ]);
+    }, 1000);
+  }
 
   const displayName = useMemo(() => formatDisplayName(username, email), [username, email]);
   const avatarInitial = useMemo(() => {
@@ -86,15 +120,7 @@ export function DashboardLayout({
                 <span className="text-sm font-medium">Back</span>
               </button>
             ) : (
-              <img
-                src="/logo3-dark.svg"
-                alt=""
-                width={44}
-                height={44}
-                decoding="async"
-                className="h-11 w-11 shrink-0 object-contain"
-                aria-hidden
-              />
+              <img src="/logo3-dark.svg" alt="" width={44} height={44} decoding="async" className="h-11 w-11 shrink-0 object-contain" aria-hidden />
             )}
           </div>
 
@@ -121,6 +147,111 @@ export function DashboardLayout({
         </main>
 
         <DashboardMobileNav pathname={pathname} invoiceBadgeCount={invoiceNavBadgeCount} />
+      </div>
+
+      {/* ── Chatbot FAB ── */}
+      <button
+        type="button"
+        aria-label="Open assistant"
+        onClick={() => setChatOpen((o) => !o)}
+        className={`fixed bottom-[5.5rem] right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f0f1a] ring-1 ring-violet-500/40 shadow-[0_0_24px_rgba(124,58,237,0.45)] transition-all duration-200 hover:scale-110 active:scale-95 md:bottom-6 md:right-6 ${
+          chatOpen ? "pointer-events-none opacity-0 scale-75" : "opacity-100 scale-100"
+        }`}
+      >
+        <img src="/bot-icon.svg" width="38" height="38" alt="" aria-hidden />
+      </button>
+
+      {/* ── Chat panel ── */}
+      <div
+        className={`fixed bottom-[5.5rem] right-4 z-[49] flex w-[calc(100vw-2rem)] max-w-sm flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-[#0f0f1a] shadow-[0_8px_40px_rgba(0,0,0,0.6)] transition-all duration-300 ease-out md:bottom-24 md:right-6 ${
+          chatOpen
+            ? "pointer-events-auto translate-y-0 opacity-100"
+            : "pointer-events-none translate-y-4 opacity-0"
+        }`}
+        style={{ height: "460px" }}
+      >
+        {/* Panel header */}
+        <div className="relative flex shrink-0 items-center gap-2 border-b border-zinc-800 px-3 py-2">
+          <div className="absolute left-3 h-8 w-8 rounded-full bg-violet-600/20 blur-xl" />
+          <img src="/bot-icon.svg" width="28" height="28" alt="" aria-hidden className="relative shrink-0 drop-shadow-[0_0_6px_rgba(124,58,237,0.8)]" />
+          <div className="relative flex-1">
+            <p className="text-xs font-bold text-white">Assistant</p>
+            <div className="flex items-center gap-1">
+              <span className="h-1 w-1 animate-pulse rounded-full bg-emerald-400" />
+              <p className="text-[9px] text-emerald-400">Online · ready to help</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setChatOpen(false)}
+            aria-label="Close"
+            className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Messages — flex-col, first message at top, newest at bottom */}
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2">
+          {messages.map((msg) => (
+            <div key={msg.id} className={`flex items-end gap-1.5 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              {msg.role === "bot" && (
+                <img src="/bot-icon.svg" width="20" height="20" alt="" aria-hidden className="mb-0.5 shrink-0" />
+              )}
+              <div className={`max-w-[78%] rounded-xl px-3 py-2 text-xs leading-relaxed ${
+                msg.role === "user"
+                  ? "rounded-br-sm bg-gradient-to-br from-violet-600 to-violet-700 text-white"
+                  : "rounded-bl-sm border border-zinc-700/50 bg-zinc-800/80 text-zinc-100"
+              }`}>
+                {msg.text}
+              </div>
+              {msg.role === "user" && (
+                <div className="mb-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-700 text-[9px] font-bold text-white">
+                  {avatarInitial}
+                </div>
+              )}
+            </div>
+          ))}
+          {typing && (
+            <div className="flex items-end gap-1.5">
+              <img src="/bot-icon.svg" width="20" height="20" alt="" aria-hidden className="mb-0.5 shrink-0" />
+              <div className="flex items-center gap-1 rounded-xl rounded-bl-sm border border-zinc-700/50 bg-zinc-800/90 px-3 py-2">
+                <span className="h-1 w-1 animate-bounce rounded-full bg-violet-400 [animation-delay:0ms]" />
+                <span className="h-1 w-1 animate-bounce rounded-full bg-violet-400 [animation-delay:150ms]" />
+                <span className="h-1 w-1 animate-bounce rounded-full bg-violet-400 [animation-delay:300ms]" />
+              </div>
+            </div>
+          )}
+          <div ref={endRef} />
+        </div>
+
+        {/* Input */}
+        <div className="shrink-0 border-t border-zinc-800 bg-[#0f0f1a] px-3 py-2">
+          <div className="flex items-center gap-2 rounded-xl border border-zinc-700/60 bg-zinc-900 px-3 py-2 focus-within:border-violet-500/60 focus-within:ring-1 focus-within:ring-violet-500/20">
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send(input)}
+              placeholder="Ask anything…"
+              className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-zinc-500"
+            />
+            <button
+              type="button"
+              onClick={() => send(input)}
+              disabled={!input.trim() || typing}
+              aria-label="Send"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white transition hover:bg-violet-500 active:scale-95 disabled:opacity-35"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M22 2 11 13M22 2 15 22l-4-9-9-4 20-7z" />
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
