@@ -9,6 +9,7 @@ import type { InvoicePaymentRow, RetailerInvoiceRow } from "@/types/invoice";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableDropdown, type SearchableDropdownOption } from "@/components/ui/searchable-dropdown";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SearchBar } from "@/components/ui/search-bar";
 
 type Props = {
   initialPayments: InvoicePaymentRow[];
@@ -56,6 +57,7 @@ export function PaymentsScreen({
   preselectedInvoiceId,
 }: Props) {
   const [payments, setPayments] = useState(initialPayments);
+  const [searchQuery, setSearchQuery] = useState("");
   const [invoices] = useState(initialInvoices);
   const [saving, setSaving] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -96,6 +98,21 @@ export function PaymentsScreen({
     () => (invoiceId ? payments.filter((p) => p.invoice_id === invoiceId) : payments),
     [payments, invoiceId]
   );
+
+  const filteredPayments = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return visiblePayments;
+    return visiblePayments.filter(p => {
+      const inv = invoiceRowById.get(p.invoice_id);
+      return (
+        inv?.invoice_number?.toLowerCase().includes(q) ||
+        inv?.retailer_name?.toLowerCase().includes(q) ||
+        companyNameById[inv?.company_id ?? ""]?.toLowerCase().includes(q) ||
+        p.method?.toLowerCase().includes(q) ||
+        p.payment_date?.includes(q)
+      );
+    });
+  }, [visiblePayments, searchQuery, invoiceRowById, companyNameById]);
 
   /** Sum of payment rows per invoice (matches DB after quick-add without refetching invoices). */
   const paidTotalByInvoiceId = useMemo(() => {
@@ -266,8 +283,12 @@ export function PaymentsScreen({
 
       <section>
         <h3 className="mb-3 font-semibold text-zinc-900 dark:text-white">Recent payments</h3>
+        <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="Search by retailer, company, method…" />
+        {filteredPayments.length === 0 && searchQuery ? (
+          <p className="py-10 text-center text-sm text-zinc-500">No payments match &ldquo;{searchQuery}&rdquo;</p>
+        ) : (
         <ul className="flex flex-col gap-3">
-          {visiblePayments.map((p) => {
+          {filteredPayments.map((p) => {
             const inv = invoiceRowById.get(p.invoice_id);
             if (!inv) {
               const orphanAmt = round2(Number(p.amount ?? 0));
@@ -329,12 +350,13 @@ export function PaymentsScreen({
               </li>
             );
           })}
-          {visiblePayments.length === 0 ? (
+          {filteredPayments.length === 0 && !searchQuery ? (
             <li className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-900/40 px-4 py-10 text-center text-sm text-zinc-500">
               No payments yet.
             </li>
           ) : null}
         </ul>
+        )}
       </section>
 
       <button
@@ -528,7 +550,7 @@ export function PaymentsScreen({
         type="button"
         onClick={openAdd}
         aria-label="Add payment"
-        className={`bg-accent text-accent-foreground fixed bottom-24 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full text-3xl shadow-[0_0_24px_rgba(224,192,104,0.35)] transition hover:scale-105 active:scale-95 md:bottom-10 md:right-10 ${
+        className={`bg-accent text-accent-foreground fixed bottom-24 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full text-3xl shadow-[0_0_24px_rgba(224,192,104,0.35)] transition hover:scale-105 active:scale-95 md:bottom-10 md:right-10 ${
           addOpen ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
       >

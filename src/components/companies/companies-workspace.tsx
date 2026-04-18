@@ -11,6 +11,7 @@ import { useWorkspaceUiSession } from "@/hooks/use-workspace-ui-session";
 import { sumGoodsReturnAmountsByInvoiceId, netInvoiceTotalAfterReturns } from "@/lib/invoice-net-after-returns";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { SearchBar } from "@/components/ui/search-bar";
 
 type Props = {
   initialCompanies: CompanyRow[];
@@ -293,6 +294,7 @@ export function CompaniesWorkspace({
   const pathname = usePathname();
   const router = useRouter();
   const [companies, setCompanies] = useState<CompanyRow[]>(initialCompanies);
+  const [searchQuery, setSearchQuery] = useState("");
   const [panel, setPanel] = useState<PanelMode>("closed");
   const prevPanelRef = useRef<PanelMode>("closed");
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -349,6 +351,17 @@ export function CompaniesWorkspace({
     () => companies.reduce((sum, c) => sum + (invoiceCountByCompany[c.id] ?? 0), 0),
     [companies, invoiceCountByCompany]
   );
+
+  const filteredCompanies = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return companies;
+    return companies.filter(c =>
+      c.name?.toLowerCase().includes(q) ||
+      c.gst_no?.toLowerCase().includes(q) ||
+      c.city?.toLowerCase().includes(q) ||
+      c.state?.toLowerCase().includes(q)
+    );
+  }, [companies, searchQuery]);
 
   useEffect(() => {
     if (panel !== "view" || !selected) {
@@ -975,8 +988,13 @@ export function CompaniesWorkspace({
           </button>
         </div>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {companies.map((c) => {
+        <>
+          <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="Search companies…" />
+          {filteredCompanies.length === 0 ? (
+            <p className="py-10 text-center text-sm text-zinc-500">No companies match &ldquo;{searchQuery}&rdquo;</p>
+          ) : (
+          <ul className="flex flex-col gap-3">
+          {filteredCompanies.map((c) => {
             const phoneDigits = phoneDigitsFromStored(c.phone_no);
             const phoneLabel = phoneDigits ? `+91 ${phoneDigits}` : "—";
             const invCount = invoiceCountByCompany[c.id] ?? 0;
@@ -1057,6 +1075,8 @@ export function CompaniesWorkspace({
             );
           })}
         </ul>
+          )}
+        </>
       )}
 
       {/* FAB — opens add flow with sheet animation */}
