@@ -82,6 +82,8 @@ export const databaseSchema = `
 - gst_amount (numeric)
 - commission_percent (numeric)
 - commission_amount (numeric)
+- commission_paid (numeric) — amount received by the agent
+- status (text: pending | completed) — completed when commission_paid >= commission_amount
 - created_at, updated_at (timestamptz)
 
 **companies**

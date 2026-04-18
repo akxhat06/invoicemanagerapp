@@ -1264,14 +1264,14 @@ export function CompaniesWorkspace({
             <div
               className={`relative min-h-0 min-w-0 flex-1 bg-[#16181f] px-4 py-4 ${
                 inlineInvoiceEdit
-                  ? "flex flex-col overflow-hidden pb-6"
+                  ? "flex flex-col pb-6"
                   : "overflow-y-auto overscroll-contain pb-32"
               }`}
             >
               {panel === "view" && selected && (
                 <div
                   className={
-                    inlineInvoiceEdit ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" : undefined
+                    inlineInvoiceEdit ? "flex min-h-0 min-w-0 flex-1 flex-col" : undefined
                   }
                 >
                   {companyViewTab === "profile" ? (
@@ -1366,7 +1366,7 @@ export function CompaniesWorkspace({
                               <span className="font-mono font-semibold text-white">{inlineInvoiceEdit.invoice_number}</span>
                             </p>
                           </div>
-                          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                             <InvoiceEditForm
                               invoice={inlineInvoiceEdit}
                               companies={companies}

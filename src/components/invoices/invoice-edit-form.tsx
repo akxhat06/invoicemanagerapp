@@ -15,6 +15,7 @@ import type {
   RetailerInvoiceRow,
 } from "@/types/invoice";
 import type { RetailerRow } from "@/types/retailer";
+import { commissionStatusFromPaidAmounts, parseCommissionStatus } from "@/lib/commission-status";
 import type { CommissionRow } from "@/types/commission";
 import React, { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 
@@ -196,7 +197,25 @@ export function InvoiceEditForm({
   const [savingCommission, setSavingCommission] = useState(false);
   const [existingCommission, setExistingCommission] = useState<CommissionRow | null>(null);
   const [commissionPct, setCommissionPct] = useState("");
+  /** Amount received (paid to agent); status derives from paid vs commission due. */
+  const [commissionPaid, setCommissionPaid] = useState("");
   const commissionLoadedForInvoiceRef = useRef<string | null>(null);
+
+  const commissionDuePreview = useMemo(() => {
+    const basic = round2(Number(invoice.basic_amount ?? 0));
+    const pct = parseFloat(commissionPct);
+    return Number.isFinite(pct) && pct > 0 && basic > 0 ? round2((basic * pct) / 100) : 0;
+  }, [invoice.basic_amount, commissionPct]);
+
+  const commissionPaidPreview = useMemo(() => {
+    const n = parseFloat(String(commissionPaid).replace(/,/g, "").trim());
+    return round2(Number.isFinite(n) && n >= 0 ? n : 0);
+  }, [commissionPaid]);
+
+  const commissionStatusPreview = useMemo(
+    () => commissionStatusFromPaidAmounts(commissionDuePreview, commissionPaidPreview),
+    [commissionDuePreview, commissionPaidPreview]
+  );
 
   /** Avoid full-screen credit loading (and unmounting fields) when revisiting the Credit tab for the same invoice. */
   const creditListLoadedForInvoiceRef = useRef<string | null>(null);
@@ -521,11 +540,14 @@ export function InvoiceEditForm({
       if (error) { toastError(error.message); return; }
       commissionLoadedForInvoiceRef.current = invoiceId;
       if (data) {
-        setExistingCommission(data as CommissionRow);
+        const row = data as CommissionRow;
+        setExistingCommission(row);
         setCommissionPct(String(data.commission_percent ?? ""));
+        setCommissionPaid(String(round2(Number(row.commission_paid ?? 0))));
       } else {
         setExistingCommission(null);
         setCommissionPct("");
+        setCommissionPaid("");
       }
     })();
     return () => { cancelled = true; };
@@ -538,6 +560,9 @@ export function InvoiceEditForm({
     const basic = round2(Number(invoice.basic_amount ?? 0));
     const gst = round2(Number(invoice.gst_amount ?? 0));
     const amount = round2((basic * pct) / 100);
+    const paidRaw = parseFloat(String(commissionPaid).replace(/,/g, "").trim());
+    const paid = round2(Number.isFinite(paidRaw) && paidRaw >= 0 ? paidRaw : 0);
+    const status = commissionStatusFromPaidAmounts(amount, paid);
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return toastError("You must be signed in.");
@@ -545,11 +570,21 @@ export function InvoiceEditForm({
     if (existingCommission) {
       const { error } = await supabase
         .from("commissions")
-        .update({ commission_percent: pct, commission_amount: amount, updated_at: new Date().toISOString() })
+        .update({
+          commission_percent: pct,
+          commission_amount: amount,
+          commission_paid: paid,
+          status,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", existingCommission.id);
       setSavingCommission(false);
       if (error) return toastError(error.message);
-      setExistingCommission((prev) => prev ? { ...prev, commission_percent: pct, commission_amount: amount } : prev);
+      setExistingCommission((prev) =>
+        prev
+          ? { ...prev, commission_percent: pct, commission_amount: amount, commission_paid: paid, status }
+          : prev
+      );
     } else {
       const payload = {
         user_id: user.id,
@@ -561,6 +596,8 @@ export function InvoiceEditForm({
         gst_amount: gst,
         commission_percent: pct,
         commission_amount: amount,
+        commission_paid: paid,
+        status,
       };
       const { data, error } = await supabase.from("commissions").insert(payload).select().single();
       setSavingCommission(false);
@@ -993,9 +1030,9 @@ export function InvoiceEditForm({
   }
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col">
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
       {/* Scroll only the form; footer stays after all fields (never between inputs). */}
-      <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+      <div className="min-h-0 max-h-[min(100%,calc(100dvh-18rem))] flex-1 touch-pan-y overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] md:max-h-[min(100%,calc(100dvh-14rem))]">
         <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-1 ring-1 ring-white/[0.03]">
           <div className="grid grid-cols-2 gap-1 sm:grid-cols-5">
             <button
@@ -1741,32 +1778,69 @@ export function InvoiceEditForm({
                   </div>
                 </div>
 
-                {/* Commission amount display */}
-                {(() => {
-                  const basic = round2(Number(invoice.basic_amount ?? 0));
-                  const pct = parseFloat(commissionPct);
-                  const amount = Number.isFinite(pct) && pct > 0 && basic > 0 ? round2((basic * pct) / 100) : 0;
-                  return (
-                    <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.07] px-4 py-4">
-                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-violet-400">Commission Amount</p>
-                      <p className="text-2xl font-bold tracking-tight text-white">
-                        {amount > 0
-                          ? formatInr(amount)
-                          : <span className="text-zinc-600">₹ —</span>}
-                      </p>
-                      {amount > 0 && (
-                        <p className="mt-1 text-xs text-zinc-500">
-                          {commissionPct}% of {formatInr(basic)} (basic amount)
-                        </p>
-                      )}
-                    </div>
-                  );
-                })()}
+                {/* Commission amount (due) */}
+                <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.07] px-4 py-4">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-violet-400">Commission due</p>
+                  <p className="text-2xl font-bold tracking-tight text-white">
+                    {commissionDuePreview > 0 ? (
+                      formatInr(commissionDuePreview)
+                    ) : (
+                      <span className="text-zinc-600">₹ —</span>
+                    )}
+                  </p>
+                  {commissionDuePreview > 0 && (
+                    <p className="mt-1 text-xs text-zinc-500">
+                      {commissionPct}% of {formatInr(round2(Number(invoice.basic_amount ?? 0)))} (basic amount)
+                    </p>
+                  )}
+                </div>
+
+                {/* Commission received */}
+                <div>
+                  <label htmlFor="inv-com-paid" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    Commission received
+                  </label>
+                  <input
+                    id="inv-com-paid"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0"
+                    value={commissionPaid}
+                    onChange={(e) => setCommissionPaid(e.target.value)}
+                    disabled={savingCommission}
+                    className="w-full rounded-xl border border-white/10 bg-[#1E1E24] px-3.5 py-3 text-[15px] text-white outline-none transition placeholder:text-zinc-500 hover:border-white/15 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/15 disabled:opacity-50"
+                  />
+                  <p className="mt-1.5 text-[11px] leading-snug text-zinc-500">
+                    Enter how much commission was actually paid. Status becomes completed when received ≥ commission due.
+                  </p>
+                </div>
+
+                {/* Status (derived) */}
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#1E1E24] px-3.5 py-3">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Status</span>
+                  <span
+                    className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+                      commissionStatusPreview === "completed"
+                        ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/35"
+                        : "bg-amber-500/20 text-amber-200 ring-1 ring-amber-500/35"
+                    }`}
+                  >
+                    {commissionStatusPreview === "completed" ? "Completed" : "Pending"}
+                  </span>
+                </div>
 
                 {/* Existing commission info */}
                 {existingCommission && (
                   <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-xs text-zinc-400">
-                    Last saved: {formatInr(round2(Number(existingCommission.commission_amount)))} at {existingCommission.commission_percent}%
+                    Last saved: due {formatInr(round2(Number(existingCommission.commission_amount)))} at{" "}
+                    {existingCommission.commission_percent}% · received {formatInr(round2(Number(existingCommission.commission_paid ?? 0)))} ·{" "}
+                    <span
+                      className={
+                        parseCommissionStatus(existingCommission.status) === "completed" ? "text-emerald-400" : "text-amber-400"
+                      }
+                    >
+                      {parseCommissionStatus(existingCommission.status) === "completed" ? "Completed" : "Pending"}
+                    </span>
                   </div>
                 )}
               </>

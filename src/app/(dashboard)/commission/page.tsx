@@ -11,7 +11,7 @@ export default async function CommissionPage() {
 
   const [retRes, invRes, comRes, coRes] = await Promise.all([
     supabase.from("retailers").select("*").order("name", { ascending: true }),
-    supabase.from("retailer_invoices").select("id, company_id").order("bill_date", { ascending: false }),
+    supabase.from("retailer_invoices").select("*").order("bill_date", { ascending: false }),
     supabase.from("commissions").select("*").order("created_at", { ascending: false }),
     supabase.from("companies").select("id, name").order("name", { ascending: true }),
   ]);

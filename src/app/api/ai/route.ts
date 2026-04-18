@@ -41,7 +41,8 @@ Company → Retailer → Invoice/Bill → [Payments, Goods Returns/Credits, Comm
 
 **commissions** — commission per bill
   Columns: id, user_id, retailer_id, invoice_id, invoice_number, retailer_name,
-           basic_amount, gst_amount, commission_percent, commission_amount, created_at
+           basic_amount, gst_amount, commission_percent, commission_amount,
+           commission_paid, status (pending|completed), created_at
   FK: invoice_id → retailer_invoices.id
 
 **profiles** — user profile

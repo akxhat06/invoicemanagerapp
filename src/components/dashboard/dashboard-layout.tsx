@@ -239,7 +239,7 @@ export function DashboardLayout({
           data-tour="main-content"
           className="dashboard-app-main flex min-h-0 flex-1 flex-col px-4 pb-24 pt-5 md:px-8 md:pb-10 md:pt-8 lg:px-10"
         >
-          <div className="mx-auto w-full max-w-6xl">{children}</div>
+          <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col">{children}</div>
         </main>
 
         <DashboardMobileNav pathname={pathname} invoiceBadgeCount={invoiceNavBadgeCount} onOpenChange={setNavOpen} hidden={chatOpen} />

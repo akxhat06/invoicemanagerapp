@@ -222,13 +222,19 @@ export function RetailerDetailScreen({
   }
 
   return (
-    <div className="relative -mx-4 -mt-5 min-h-[calc(100dvh-7.5rem)] px-4 pb-28 pt-4 text-zinc-100 md:mx-0 md:mt-0 md:min-h-[calc(100dvh-8rem)] md:rounded-2xl md:border md:border-zinc-800/80 md:pb-12 md:pt-6">
+    <div
+      className={`relative -mx-4 -mt-5 px-4 pb-28 pt-4 text-zinc-100 md:mx-0 md:mt-0 md:rounded-2xl md:border md:border-zinc-800/80 md:pb-12 md:pt-6 ${
+        inlineInvoiceEdit
+          ? "flex min-h-0 flex-1 flex-col"
+          : "min-h-[calc(100dvh-7.5rem)] md:min-h-[calc(100dvh-8rem)]"
+      }`}
+    >
       <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl opacity-90 md:block" aria-hidden>
         <div className="absolute -left-1/4 -top-24 h-48 w-[150%] bg-gradient-to-b from-violet-600/14 via-fuchsia-600/5 to-transparent blur-2xl md:rounded-2xl" />
         <div className="absolute -right-8 top-16 h-40 w-40 rounded-full bg-teal-500/10 blur-3xl" />
       </div>
 
-      <header className="relative z-10 mb-6 flex flex-col gap-4 border-b border-white/[0.06] pb-5 sm:flex-row sm:items-start sm:justify-between">
+      <header className="relative z-10 mb-6 flex shrink-0 flex-col gap-4 border-b border-white/[0.06] pb-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <Link
             href="/retailers"
@@ -416,7 +422,7 @@ export function RetailerDetailScreen({
         </div>
       )}
 
-      <div className={`relative z-10 ${inlineInvoiceEdit ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "pb-8"}`}>
+      <div className={`relative z-10 ${inlineInvoiceEdit ? "flex min-h-0 flex-1 flex-col" : "pb-8"}`}>
         {retailerViewTab === "profile" && (
           <section id="panel-retailer-profile" role="tabpanel" aria-labelledby="tab-retailer-profile" className="relative z-0">
             <div className="mb-6">
@@ -495,7 +501,7 @@ export function RetailerDetailScreen({
                     Editing <span className="font-mono font-semibold text-white">{inlineInvoiceEdit.invoice_number}</span>
                   </p>
                 </div>
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                   <InvoiceEditForm
                     invoice={inlineInvoiceEdit}
                     companies={companies}

@@ -5,6 +5,7 @@ import { toastError, toastSuccess } from "@/lib/toast";
 import { SearchableDropdown, type SearchableDropdownOption } from "@/components/ui/searchable-dropdown";
 import type { RetailerRow } from "@/types/retailer";
 import type { RetailerInvoiceRow } from "@/types/invoice";
+import { commissionStatusFromPaidAmounts, parseCommissionStatus } from "@/lib/commission-status";
 import type { CommissionRow } from "@/types/commission";
 import type { CompanyRow } from "@/types/company";
 import { useEffect, useMemo, useState } from "react";
@@ -58,6 +59,7 @@ export function CommissionScreen({ initialRetailers, initialInvoices, initialCom
   const [retailerId, setRetailerId] = useState("");
   const [invoiceId, setInvoiceId] = useState("");
   const [commissionPct, setCommissionPct] = useState("");
+  const [commissionPaid, setCommissionPaid] = useState("");
 
   // Auto-filled from selected invoice
   const [basicAmount, setBasicAmount] = useState("");
@@ -132,10 +134,12 @@ export function CommissionScreen({ initialRetailers, initialInvoices, initialCom
       setInvoiceNumber(inv.invoice_number);
       setBasicAmount(String(inv.basic_amount ?? ""));
       setGstAmount(String(inv.gst_amount ?? ""));
+      setCommissionPaid("");
     } else {
       setInvoiceNumber("");
       setBasicAmount("");
       setGstAmount("");
+      setCommissionPaid("");
     }
   }
 
@@ -146,6 +150,7 @@ export function CommissionScreen({ initialRetailers, initialInvoices, initialCom
     setInvoiceNumber("");
     setBasicAmount("");
     setGstAmount("");
+    setCommissionPaid("");
   }
 
   // Computed commission amount
@@ -156,6 +161,16 @@ export function CommissionScreen({ initialRetailers, initialInvoices, initialCom
     return round2((basic * pct) / 100);
   }, [basicAmount, commissionPct]);
 
+  const commissionPaidNum = useMemo(() => {
+    const n = parseFloat(String(commissionPaid).replace(/,/g, "").trim());
+    return round2(Number.isFinite(n) && n >= 0 ? n : 0);
+  }, [commissionPaid]);
+
+  const addFormStatusPreview = useMemo(
+    () => commissionStatusFromPaidAmounts(commissionAmount, commissionPaidNum),
+    [commissionAmount, commissionPaidNum]
+  );
+
   function resetForm() {
     setRetailerId("");
     setInvoiceId("");
@@ -163,6 +178,7 @@ export function CommissionScreen({ initialRetailers, initialInvoices, initialCom
     setBasicAmount("");
     setGstAmount("");
     setCommissionPct("");
+    setCommissionPaid("");
   }
 
   function openAdd() {
@@ -202,6 +218,8 @@ export function CommissionScreen({ initialRetailers, initialInvoices, initialCom
       gst_amount: toNum(gstAmount),
       commission_percent: toNum(commissionPct),
       commission_amount: commissionAmount,
+      commission_paid: commissionPaidNum,
+      status: commissionStatusFromPaidAmounts(commissionAmount, commissionPaidNum),
     };
 
     const { data, error } = await supabase
@@ -286,10 +304,21 @@ export function CommissionScreen({ initialRetailers, initialInvoices, initialCom
                           )}
                         </div>
                       </div>
-                      <div className="shrink-0 rounded-lg bg-violet-500/15 px-2.5 py-1 ring-1 ring-violet-500/25">
-                        <p className="text-sm font-bold text-violet-200">
-                          {formatInr(round2(Number(c.commission_amount)))}
-                        </p>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span
+                          className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ${
+                            parseCommissionStatus(c.status) === "completed"
+                              ? "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30"
+                              : "bg-amber-500/15 text-amber-200 ring-amber-500/30"
+                          }`}
+                        >
+                          {parseCommissionStatus(c.status) === "completed" ? "Completed" : "Pending"}
+                        </span>
+                        <div className="rounded-lg bg-violet-500/15 px-2.5 py-1 ring-1 ring-violet-500/25">
+                          <p className="text-sm font-bold text-violet-200">
+                            {formatInr(round2(Number(c.commission_amount)))}
+                          </p>
+                        </div>
                       </div>
                     </div>
                     {/* Bottom row: amounts + rate + date */}
@@ -297,6 +326,10 @@ export function CommissionScreen({ initialRetailers, initialInvoices, initialCom
                       <span>Basic: <span className="text-zinc-300">{formatInr(round2(Number(c.basic_amount)))}</span></span>
                       <span>GST: <span className="text-zinc-300">{formatInr(round2(Number(c.gst_amount)))}</span></span>
                       <span>Rate: <span className="text-zinc-300">{c.commission_percent}%</span></span>
+                      <span>
+                        Received:{" "}
+                        <span className="text-zinc-300">{formatInr(round2(Number(c.commission_paid ?? 0)))}</span>
+                      </span>
                       <span className="ml-auto text-zinc-600">{formatDate(c.created_at)}</span>
                     </div>
                   </div>
@@ -417,10 +450,10 @@ export function CommissionScreen({ initialRetailers, initialInvoices, initialCom
             </div>
           </div>
 
-          {/* Commission Amount — computed */}
+          {/* Commission due — computed */}
           <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.07] px-4 py-4">
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-violet-400">
-              Commission Amount
+              Commission due
             </p>
             <p className="text-2xl font-bold tracking-tight text-white">
               {commissionAmount > 0
@@ -432,6 +465,39 @@ export function CommissionScreen({ initialRetailers, initialInvoices, initialCom
                 {commissionPct}% of {formatInr(toNum(basicAmount))} (basic amount)
               </p>
             )}
+          </div>
+
+          {/* Commission received */}
+          <div>
+            <label className={labelCls} htmlFor="com-paid">
+              Commission received
+            </label>
+            <input
+              id="com-paid"
+              className={inputCls}
+              inputMode="decimal"
+              placeholder="0"
+              value={commissionPaid}
+              onChange={(e) => setCommissionPaid(e.target.value)}
+              disabled={saving}
+            />
+            <p className="text-muted-foreground mt-1 text-[11px] leading-snug">
+              Status becomes completed when received ≥ commission due.
+            </p>
+          </div>
+
+          {/* Status (derived) */}
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/50 px-3.5 py-3">
+            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Status</span>
+            <span
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+                addFormStatusPreview === "completed"
+                  ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30"
+                  : "bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/30"
+              }`}
+            >
+              {addFormStatusPreview === "completed" ? "Completed" : "Pending"}
+            </span>
           </div>
         </div>
 
