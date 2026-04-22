@@ -1070,43 +1070,77 @@ export function InvoicesWorkspace({
           {filteredInvoices.map((inv) => {
             const co = companyMap.get(inv.company_id) ?? "—";
             const q = Math.max(1, Math.floor(Number(inv.quantity ?? 1)));
-            const gross = Number(inv.total_amount ?? 0);
-            const ret = returnAmountByInvoiceId[inv.id] ?? 0;
-            const net = netInvoiceTotalAfterReturns(gross, ret);
+            const invoiceTotal = Number(inv.invoice_amount ?? 0);
+            const cnAmount = returnAmountByInvoiceId[inv.id] ?? 0;
+            const amountPaid = Number(inv.payment_received ?? 0);
+            const balance = Number(inv.outstanding_amount ?? 0);
+            const isFullyPaid = balance <= 0;
             return (
               <li key={inv.id}>
-                <div className="flex w-full items-stretch overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-950/95 to-zinc-900/50 text-left shadow-[0_4px_24px_rgba(0,0,0,0.35)] ring-1 ring-white/[0.03]">
-                  <span
-                    className="w-1.5 shrink-0 bg-gradient-to-b from-amber-400/90 to-amber-700/80"
-                    aria-hidden
-                  />
-                  <div className="flex min-w-0 flex-1 items-center gap-3 py-4 pl-3 pr-4 sm:gap-4 sm:pl-4">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-mono text-[15px] font-semibold tracking-tight text-white sm:text-base">
-                        {inv.invoice_number}
-                      </p>
-                      <p className="mt-1 text-sm text-zinc-400">
-                        {inv.retailer_name?.trim() || "Retailer"}{" "}
-                        <span className="text-zinc-600">·</span> {co}
-                      </p>
-                      <p className="mt-1 text-xs text-zinc-500">
-                        {inv.bill_date?.slice(0, 10) ?? "—"} · Qty {q}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end">
-                      <span className="font-mono text-sm font-semibold tabular-nums tracking-tight text-amber-200 sm:text-[15px]">
-                        {formatInr(net)}
-                      </span>
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Net total</span>
-                      {ret > 0 ? (
-                        <span className="mt-0.5 max-w-[9rem] text-right text-[10px] leading-tight text-zinc-500">
-                          Bill {formatInr(gross)} · −CR {formatInr(ret)}
+                <div className="overflow-hidden rounded-2xl border border-zinc-800/70 bg-gradient-to-br from-zinc-950 to-zinc-900/80 shadow-[0_4px_24px_rgba(0,0,0,0.4)] ring-1 ring-white/[0.04]">
+                  {/* Header row */}
+                  <div className="flex items-stretch">
+                    <span
+                      className="w-1 shrink-0 bg-gradient-to-b from-amber-400 to-amber-600"
+                      aria-hidden
+                    />
+                    <div className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4 py-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-mono text-[15px] font-semibold tracking-tight text-white">
+                          {inv.invoice_number}
+                        </p>
+                        <p className="mt-0.5 truncate text-sm text-zinc-400">
+                          {inv.retailer_name?.trim() || "Retailer"}{" "}
+                          <span className="text-zinc-600">·</span>{" "}
+                          <span className="text-zinc-500">{co}</span>
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="text-[11px] text-zinc-500">
+                          {inv.bill_date?.slice(0, 10) ?? "—"}
                         </span>
-                      ) : null}
-                      <span className="mt-0.5 font-mono text-[11px] font-medium tabular-nums text-sky-200/90">
-                        {formatInr(Number(inv.transportation_amount ?? 0))}
+                        <span className="rounded-md bg-zinc-800/70 px-2 py-0.5 font-mono text-[11px] font-medium text-zinc-400">
+                          Qty {q}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="mx-4 h-px bg-zinc-800/60" />
+
+                  {/* Financial grid */}
+                  <div className="grid grid-cols-2 gap-px bg-zinc-800/50">
+                    {/* Invoice Total */}
+                    <div className="flex items-center justify-between bg-zinc-950/60 px-3 py-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Invoice</span>
+                      <span className="font-mono text-[12px] font-semibold tabular-nums text-amber-200">
+                        {formatInr(invoiceTotal)}
                       </span>
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Transport</span>
+                    </div>
+
+                    {/* CN Amount */}
+                    <div className="flex items-center justify-between bg-zinc-950/60 px-3 py-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">CN</span>
+                      <span className={`font-mono text-[12px] font-semibold tabular-nums ${cnAmount > 0 ? "text-rose-300" : "text-zinc-600"}`}>
+                        {cnAmount > 0 ? formatInr(cnAmount) : "—"}
+                      </span>
+                    </div>
+
+                    {/* Amount Paid */}
+                    <div className="flex items-center justify-between bg-zinc-950/60 px-3 py-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Paid</span>
+                      <span className={`font-mono text-[12px] font-semibold tabular-nums ${amountPaid > 0 ? "text-emerald-300" : "text-zinc-600"}`}>
+                        {amountPaid > 0 ? formatInr(amountPaid) : "—"}
+                      </span>
+                    </div>
+
+                    {/* Balance */}
+                    <div className="flex items-center justify-between bg-zinc-950/60 px-3 py-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Balance</span>
+                      <span className={`font-mono text-[12px] font-semibold tabular-nums ${isFullyPaid ? "text-emerald-400" : "text-sky-300"}`}>
+                        {isFullyPaid ? "Paid ✓" : formatInr(balance)}
+                      </span>
                     </div>
                   </div>
                 </div>
